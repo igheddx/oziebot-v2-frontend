@@ -1,4 +1,5 @@
 name: Frontend Deploy
+# Repo-local deploy workflow for the split frontend repository.
 
 on:
   workflow_dispatch:
