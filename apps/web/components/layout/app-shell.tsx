@@ -14,7 +14,8 @@ type AppShellProps = {
 };
 
 export function AppShell({ title, subtitle, children, showModeToggle = true }: AppShellProps) {
-  const { logoutUser } = useAuth();
+  const { logoutUser, role } = useAuth();
+  const isRootAdmin = role === "root_admin";
 
   return (
     <div className="mx-auto min-h-dvh max-w-lg px-4 pb-24 pt-4 sm:px-6">
@@ -25,6 +26,14 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
             <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
           </div>
           <div className="flex items-center gap-2">
+            {isRootAdmin ? (
+              <Link
+                href="/admin/token-policy"
+                className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-muted"
+              >
+                Admin
+              </Link>
+            ) : null}
             <Link href="/onboarding" className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-muted">
               Setup
             </Link>

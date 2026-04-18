@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const links = [
+import { useAuth } from "@/components/providers/auth-provider";
+
+const baseLinks = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/strategies", label: "Strategies" },
   { href: "/tokens", label: "Tokens" },
@@ -14,7 +16,9 @@ const links = [
 
 export function MobileTabbar() {
   const pathname = usePathname();
+  const { role } = useAuth();
   const [query, setQuery] = useState("");
+  const links = role === "root_admin" ? [...baseLinks, { href: "/admin/token-policy", label: "Admin" }] : baseLinks;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -30,7 +34,10 @@ export function MobileTabbar() {
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur">
-      <ul className="mx-auto grid max-w-lg grid-cols-5 gap-1">
+      <ul
+        className="mx-auto grid max-w-lg gap-1"
+        style={{ gridTemplateColumns: `repeat(${links.length}, minmax(0, 1fr))` }}
+      >
         {links.map((item) => {
           const active = pathname === item.href;
           const target = query ? `${item.href}${query}` : item.href;
