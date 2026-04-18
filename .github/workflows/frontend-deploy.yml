@@ -68,5 +68,27 @@ jobs:
             --exclude "_next/static/*" \
             --cache-control "public,max-age=60"
 
+      - name: Publish route aliases for deep links
+        run: |
+          find out -type f -name 'index.html' | while read -r file; do
+            route="${file#out/}"
+            route="${route%/index.html}"
+            if [ -z "${route}" ] || [ "${route}" = "index.html" ]; then
+              continue
+            fi
+            aws s3api put-object \
+              --bucket "${S3_BUCKET}" \
+              --key "${route}" \
+              --body "${file}" \
+              --content-type "text/html; charset=utf-8" \
+              --cache-control "public,max-age=60"
+            aws s3api put-object \
+              --bucket "${S3_BUCKET}" \
+              --key "${route}/" \
+              --body "${file}" \
+              --content-type "text/html; charset=utf-8" \
+              --cache-control "public,max-age=60"
+          done
+
       - name: Invalidate CloudFront cache
         run: aws cloudfront create-invalidation --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" --paths "/*"
