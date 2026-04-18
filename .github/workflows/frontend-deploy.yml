@@ -1,0 +1,71 @@
+name: Frontend Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - "apps/**"
+      - ".github/workflows/frontend-deploy.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: frontend-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  S3_BUCKET: ${{ vars.FRONTEND_S3_BUCKET || 'app.oziebot.com' }}
+  CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.FRONTEND_CLOUDFRONT_DISTRIBUTION_ID }}
+  NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL || 'https://api.oziebot.com' }}
+  NEXT_PUBLIC_ENABLE_MOCK_FALLBACKS: "false"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build static export
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ env.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_ENABLE_MOCK_FALLBACKS: ${{ env.NEXT_PUBLIC_ENABLE_MOCK_FALLBACKS }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload immutable assets
+        run: |
+          aws s3 sync out/ "s3://${S3_BUCKET}" \
+            --delete \
+            --exclude "*" \
+            --include "_next/static/*" \
+            --cache-control "public,max-age=31536000,immutable"
+
+      - name: Upload HTML and manifest files
+        run: |
+          aws s3 sync out/ "s3://${S3_BUCKET}" \
+            --exclude "_next/static/*" \
+            --cache-control "public,max-age=60"
+
+      - name: Invalidate CloudFront cache
+        run: aws cloudfront create-invalidation --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" --paths "/*"
