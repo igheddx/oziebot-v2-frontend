@@ -154,6 +154,25 @@ export async function getDashboardSummary(mode: TradingMode): Promise<DashboardS
       positions: [],
       activeTrades: [],
       recentActivity: [],
+      feeAnalytics: {
+        grossPnl: 0,
+        netPnl: 0,
+        totalFeesToday: 0,
+        totalFeesWeek: 0,
+        totalFeesMonth: 0,
+        feesByStrategy: [],
+        feesBySymbol: [],
+        makerCount: 0,
+        takerCount: 0,
+        mixedCount: 0,
+        avgEstimatedSlippageBps: 0,
+        avgNetEdgeAtEntryBps: 0,
+        skippedTradesDueToFees: 0,
+        paperLiveComparison: {
+          paper: { fees: 0, netPnl: 0 },
+          live: { fees: 0, netPnl: 0 },
+        },
+      },
     };
   }
   return {
@@ -167,6 +186,25 @@ export async function getDashboardSummary(mode: TradingMode): Promise<DashboardS
     positions: payload.positions ?? [],
     activeTrades: payload.activeTrades ?? [],
     recentActivity: payload.recentActivity ?? [],
+    feeAnalytics: payload.feeAnalytics ?? {
+      grossPnl: 0,
+      netPnl: 0,
+      totalFeesToday: 0,
+      totalFeesWeek: 0,
+      totalFeesMonth: 0,
+      feesByStrategy: [],
+      feesBySymbol: [],
+      makerCount: 0,
+      takerCount: 0,
+      mixedCount: 0,
+      avgEstimatedSlippageBps: 0,
+      avgNetEdgeAtEntryBps: 0,
+      skippedTradesDueToFees: 0,
+      paperLiveComparison: {
+        paper: { fees: 0, netPnl: 0 },
+        live: { fees: 0, netPnl: 0 },
+      },
+    },
   };
 }
 

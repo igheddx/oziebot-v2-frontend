@@ -40,6 +40,12 @@ export function DashboardScreen() {
         detail: `${summary.pnlPercent >= 0 ? "+" : ""}${summary.pnlPercent.toFixed(2)}%`,
       },
       { label: "Active Positions", value: summary.positions.length.toString(), tone: "neutral" },
+      { label: "Fees (30d)", value: formatMoney(summary.feeAnalytics.totalFeesMonth), tone: "neutral" },
+      {
+        label: "Avg Net Edge",
+        value: `${summary.feeAnalytics.avgNetEdgeAtEntryBps.toFixed(1)} bps`,
+        tone: summary.feeAnalytics.avgNetEdgeAtEntryBps >= 0 ? "positive" : "negative",
+      },
     ];
   }, [summary]);
 
@@ -84,6 +90,71 @@ export function DashboardScreen() {
           </section>
 
           <GrowthChart values={summary.growth} positive={summary.pnlValue >= 0} />
+
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Fee Drag</h2>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                ["Gross P&L", formatMoney(summary.feeAnalytics.grossPnl)],
+                ["Net P&L", formatMoney(summary.feeAnalytics.netPnl)],
+                ["Fees Today", formatMoney(summary.feeAnalytics.totalFeesToday)],
+                ["Fees This Week", formatMoney(summary.feeAnalytics.totalFeesWeek)],
+                ["Avg Slippage", `${summary.feeAnalytics.avgEstimatedSlippageBps.toFixed(1)} bps`],
+                ["Skipped For Fees", summary.feeAnalytics.skippedTradesDueToFees.toString()],
+              ].map(([label, value]) => (
+                <article key={label} className="oz-panel p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-muted">{label}</p>
+                  <p className="mt-1 text-base font-semibold text-foreground">{value}</p>
+                </article>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <article className="oz-panel p-3">
+                <p className="text-[11px] uppercase tracking-wide text-muted">Fill Mix</p>
+                <div className="mt-2 space-y-1 text-sm text-muted">
+                  <p>Maker {summary.feeAnalytics.makerCount}</p>
+                  <p>Taker {summary.feeAnalytics.takerCount}</p>
+                  <p>Mixed {summary.feeAnalytics.mixedCount}</p>
+                </div>
+              </article>
+              <article className="oz-panel p-3">
+                <p className="text-[11px] uppercase tracking-wide text-muted">Mode Comparison</p>
+                <div className="mt-2 space-y-2 text-sm text-muted">
+                  {(["paper", "live"] as const).map((entryMode) => (
+                    <div key={entryMode} className="rounded-lg bg-surface px-3 py-2">
+                      <p className="font-semibold uppercase tracking-wide text-foreground">{entryMode}</p>
+                      <p>Fees {formatMoney(summary.feeAnalytics.paperLiveComparison[entryMode].fees)}</p>
+                      <p>Net {formatMoney(summary.feeAnalytics.paperLiveComparison[entryMode].netPnl)}</p>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <article className="oz-panel p-3">
+                <p className="text-[11px] uppercase tracking-wide text-muted">Fees by Strategy</p>
+                <div className="mt-2 space-y-2">
+                  {summary.feeAnalytics.feesByStrategy.slice(0, 4).map((row) => (
+                    <div key={row.strategy} className="flex items-center justify-between text-sm">
+                      <span className="text-muted">{row.strategy}</span>
+                      <span className="font-semibold text-foreground">{formatMoney(row.fees)}</span>
+                    </div>
+                  ))}
+                </div>
+              </article>
+              <article className="oz-panel p-3">
+                <p className="text-[11px] uppercase tracking-wide text-muted">Fees by Symbol</p>
+                <div className="mt-2 space-y-2">
+                  {summary.feeAnalytics.feesBySymbol.slice(0, 4).map((row) => (
+                    <div key={row.symbol} className="flex items-center justify-between text-sm">
+                      <span className="text-muted">{row.symbol}</span>
+                      <span className="font-semibold text-foreground">{formatMoney(row.fees)}</span>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            </div>
+          </section>
 
           <section className="space-y-3">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Enabled Strategies</h2>

@@ -36,6 +36,22 @@ export type DashboardSummary = {
     price: number;
     timestamp: string;
   }>;
+  feeAnalytics: {
+    grossPnl: number;
+    netPnl: number;
+    totalFeesToday: number;
+    totalFeesWeek: number;
+    totalFeesMonth: number;
+    feesByStrategy: Array<{ strategy: string; fees: number }>;
+    feesBySymbol: Array<{ symbol: string; fees: number }>;
+    makerCount: number;
+    takerCount: number;
+    mixedCount: number;
+    avgEstimatedSlippageBps: number;
+    avgNetEdgeAtEntryBps: number;
+    skippedTradesDueToFees: number;
+    paperLiveComparison: Record<TradingMode, { fees: number; netPnl: number }>;
+  };
 };
 
 export type TokenItem = {

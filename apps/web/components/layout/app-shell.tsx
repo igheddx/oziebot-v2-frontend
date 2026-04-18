@@ -25,7 +25,12 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
   const navLinks = useMemo(
     () =>
       [
-        ...(isRootAdmin ? [{ href: "/admin/token-policy", label: "Admin" }] : []),
+        ...(isRootAdmin
+          ? [
+              { href: "/admin/token-policy", label: "Admin" },
+              { href: "/admin/fee-settings", label: "Fee Settings" },
+            ]
+          : []),
         { href: "/onboarding", label: "Setup" },
       ].map((item) => ({
         ...item,
@@ -78,7 +83,7 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
       </header>
       <main className="space-y-4">{children}</main>
       {drawerOpen ? (
-        <div className="fixed inset-0 z-50">
+        <div className="fixed inset-0 z-[60]">
           <button
             type="button"
             aria-label="Close menu"
@@ -129,7 +134,7 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
           </aside>
         </div>
       ) : null}
-      <MobileTabbar />
+      {drawerOpen ? null : <MobileTabbar />}
     </div>
   );
 }

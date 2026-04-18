@@ -97,6 +97,31 @@ export function mockDashboard(mode: TradingMode): DashboardSummary {
         timestamp: "09:44",
       },
     ],
+    feeAnalytics: {
+      grossPnl: isLive ? 1452.56 : 701.22,
+      netPnl: isLive ? 1248.11 : 612.09,
+      totalFeesToday: isLive ? 18.42 : 7.11,
+      totalFeesWeek: isLive ? 96.33 : 31.28,
+      totalFeesMonth: isLive ? 221.9 : 84.47,
+      feesByStrategy: [
+        { strategy: "momentum", fees: isLive ? 124.5 : 43.2 },
+        { strategy: "dca", fees: isLive ? 61.8 : 28.4 },
+      ],
+      feesBySymbol: [
+        { symbol: "BTC-USD", fees: isLive ? 88.2 : 31.7 },
+        { symbol: "ETH-USD", fees: isLive ? 56.3 : 22.8 },
+      ],
+      makerCount: isLive ? 12 : 20,
+      takerCount: isLive ? 18 : 9,
+      mixedCount: isLive ? 4 : 3,
+      avgEstimatedSlippageBps: isLive ? 11.4 : 8.2,
+      avgNetEdgeAtEntryBps: isLive ? 46.8 : 61.4,
+      skippedTradesDueToFees: isLive ? 7 : 3,
+      paperLiveComparison: {
+        paper: { fees: 84.47, netPnl: 612.09 },
+        live: { fees: 221.9, netPnl: 1248.11 },
+      },
+    },
   };
 }
 
