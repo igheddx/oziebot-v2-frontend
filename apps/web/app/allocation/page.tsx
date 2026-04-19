@@ -34,6 +34,7 @@ function formatStrategyName(id: string) {
 
 export default function AllocationPage() {
   const { mode } = useTradingMode();
+  const isLiveMode = mode === "live";
   const [plan, setPlan] = useState<PlanState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [localPercents, setLocalPercents] = useState<Record<string, number>>({});
@@ -132,9 +133,15 @@ export default function AllocationPage() {
   const savePlan = async () => {
     setSaving(true);
     setStatus(null);
-    const totalCents = Math.round(parseFloat(totalDollars || "0") * 100);
+    const totalCents = isLiveMode
+      ? plan?.totalCapitalCents ?? 0
+      : Math.round(parseFloat(totalDollars || "0") * 100);
     if (totalCents <= 0) {
-      setStatus("Total capital must be greater than $0.");
+      setStatus(
+        isLiveMode
+          ? "Coinbase available cash must be greater than $0 before live allocations can be saved."
+          : "Total capital must be greater than $0.",
+      );
       setSaving(false);
       return;
     }
@@ -175,19 +182,25 @@ export default function AllocationPage() {
   return (
     <AppShell title="Strategy Allocation" subtitle="Compact thumb sliders and quick edits for portfolio split.">
       <section className="oz-panel space-y-3 p-3">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Total Capital ({mode.toUpperCase()})</p>
-          <div className="flex items-center gap-1">
-            <span className="text-sm text-muted">$</span>
-            <input
-              type="number"
-              min={0}
-              className="h-8 w-28 rounded-lg border border-border bg-card px-2 text-right text-sm outline-none focus:border-sky-400"
-              value={totalDollars}
-              onChange={(e) => setTotalDollars(e.target.value)}
-            />
-          </div>
-        </div>
+         <div className="flex items-center justify-between">
+           <p className="text-xs font-semibold uppercase tracking-wide text-muted">Total Capital ({mode.toUpperCase()})</p>
+           <div className="flex items-center gap-1">
+             <span className="text-sm text-muted">$</span>
+             <input
+               type="number"
+               min={0}
+               readOnly={isLiveMode}
+               className="h-8 w-28 rounded-lg border border-border bg-card px-2 text-right text-sm outline-none focus:border-sky-400 read-only:text-muted read-only:opacity-80"
+               value={totalDollars}
+               onChange={(e) => setTotalDollars(e.target.value)}
+             />
+           </div>
+         </div>
+         <p className="text-xs text-muted">
+           {isLiveMode
+             ? "Live capital auto-syncs from your Coinbase available USD/USDC/USDT cash. Only paper mode uses manual total capital."
+             : "Paper mode uses your manually entered total capital."}
+         </p>
 
         {plan.items.map((item) => (
           <article key={item.strategyId}>
