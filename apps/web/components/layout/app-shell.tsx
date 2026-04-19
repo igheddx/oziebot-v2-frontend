@@ -56,7 +56,7 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
 
   return (
     <div className="mx-auto min-h-dvh w-full max-w-6xl px-4 pb-24 pt-4 sm:px-6 sm:pt-6 md:pb-8 lg:px-8">
-      <header className="mb-4 space-y-3 sm:mb-6">
+      <header className="mb-4 space-y-2 sm:mb-6">
         <div className="flex items-start justify-between gap-3 sm:gap-4">
           <div className="min-w-0 flex-1">
             <Link href={queryString ? `/dashboard?${queryString}` : "/dashboard"} className="inline-flex">
@@ -64,11 +64,11 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
                 src={logo}
                 alt="Oziebot"
                 priority
-                className="h-auto w-32 sm:w-36 lg:w-40"
-                sizes="(min-width: 1024px) 160px, (min-width: 640px) 144px, 128px"
+                className="h-auto w-20 sm:w-24 lg:w-28"
+                sizes="(min-width: 1024px) 112px, (min-width: 640px) 96px, 80px"
               />
             </Link>
-            <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
             {subtitle ? <p className="mt-1 max-w-3xl text-sm text-muted sm:text-[15px]">{subtitle}</p> : null}
           </div>
           <div className="flex items-center gap-2">
