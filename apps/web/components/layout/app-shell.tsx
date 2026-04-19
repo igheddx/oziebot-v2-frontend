@@ -56,10 +56,10 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
 
   return (
     <div className="mx-auto min-h-dvh w-full max-w-6xl px-4 pb-24 pt-4 sm:px-6 sm:pt-6 md:pb-8 lg:px-8">
-      <header className="mb-4 space-y-2 sm:mb-6">
-        <div className="flex items-start justify-between gap-3 sm:gap-4">
-          <div className="min-w-0 flex-1">
-            <Link href={queryString ? `/dashboard?${queryString}` : "/dashboard"} className="inline-flex">
+      <header className="sticky top-0 z-30 mb-4 sm:mb-6">
+        <div className="oz-panel border-border/80 bg-background/90 px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.2)] backdrop-blur sm:px-5">
+          <div className="flex items-center justify-between gap-3 sm:gap-4">
+            <Link href={queryString ? `/dashboard?${queryString}` : "/dashboard"} className="inline-flex shrink-0">
               <Image
                 src={logo}
                 alt="Oziebot"
@@ -68,26 +68,31 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
                 sizes="(min-width: 1024px) 112px, (min-width: 640px) 96px, 80px"
               />
             </Link>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
-            {subtitle ? <p className="mt-1 max-w-3xl text-sm text-muted sm:text-[15px]">{subtitle}</p> : null}
+            <div className="flex items-center gap-2">
+              {showModeToggle ? <ModeBadge /> : null}
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(true)}
+                aria-expanded={drawerOpen}
+                aria-controls="app-shell-menu"
+                aria-label="Open menu"
+                className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card/80 text-muted"
+              >
+                <span className="sr-only">Open menu</span>
+                <span className="flex flex-col gap-1.5">
+                  <span className="block h-0.5 w-5 rounded-full bg-current" />
+                  <span className="block h-0.5 w-5 rounded-full bg-current" />
+                  <span className="block h-0.5 w-5 rounded-full bg-current" />
+                </span>
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            {showModeToggle ? <ModeBadge /> : null}
-            <button
-              type="button"
-              onClick={() => setDrawerOpen(true)}
-              aria-expanded={drawerOpen}
-              aria-controls="app-shell-menu"
-              aria-label="Open menu"
-              className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card/80 text-muted"
-            >
-              <span className="sr-only">Open menu</span>
-              <span className="flex flex-col gap-1.5">
-                <span className="block h-0.5 w-5 rounded-full bg-current" />
-                <span className="block h-0.5 w-5 rounded-full bg-current" />
-                <span className="block h-0.5 w-5 rounded-full bg-current" />
-              </span>
-            </button>
+
+          <div className="mt-3 border-t border-border/80 pt-3">
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
+            {subtitle ? (
+              <p className="mt-1 max-w-3xl text-sm text-muted sm:text-[15px]">{subtitle}</p>
+            ) : null}
           </div>
         </div>
       </header>

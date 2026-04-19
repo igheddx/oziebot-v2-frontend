@@ -18,6 +18,13 @@ const ibmPlexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "Oziebot",
   description: "Multi-tenant trading console",
+  icons: {
+    icon: [
+      { url: "/images/oziebot_favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    shortcut: [{ url: "/images/oziebot_favicon.svg", type: "image/svg+xml" }],
+  },
   appleWebApp: {
     capable: true,
     title: "Oziebot",
