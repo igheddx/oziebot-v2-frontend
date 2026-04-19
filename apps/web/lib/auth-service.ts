@@ -20,6 +20,7 @@ export const ACCESS_TOKEN_KEY = "oziebot:access-token";
 export const REFRESH_TOKEN_KEY = "oziebot:refresh-token";
 export const TRADING_MODE_KEY = "oziebot:trading-mode";
 const AUTH_MARKER_COOKIE = "oziebot_auth";
+const ACCESS_TOKEN_REFRESH_BUFFER_SECONDS = 30;
 
 type ApiErrorShape = {
   detail?: unknown;
@@ -101,6 +102,29 @@ function toApiUrl(path: string): string {
   return `${resolveApiBase()}${path}`;
 }
 
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  if (!canUseBrowserStorage()) return null;
+  const parts = token.split(".");
+  if (parts.length < 2) return null;
+  try {
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = payload.padEnd(Math.ceil(payload.length / 4) * 4, "=");
+    const decoded = window.atob(padded);
+    return JSON.parse(decoded) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function accessTokenNeedsRefresh(token: string | null): boolean {
+  if (!token) return true;
+  const payload = decodeJwtPayload(token);
+  const exp = payload?.exp;
+  if (typeof exp !== "number") return false;
+  const refreshAt = exp - ACCESS_TOKEN_REFRESH_BUFFER_SECONDS;
+  return refreshAt <= Math.floor(Date.now() / 1000);
+}
+
 async function parseApiError(res: Response): Promise<string> {
   try {
     const payload = (await res.json()) as ApiErrorShape;
@@ -168,7 +192,13 @@ export async function authFetch(path: string, init: RequestInit = {}): Promise<R
     });
 
   try {
-    let res = await send(getStoredAccessToken());
+    let accessToken = getStoredAccessToken();
+    if (accessTokenNeedsRefresh(accessToken) && getStoredRefreshToken()) {
+      const refreshed = await refreshTokens();
+      accessToken = refreshed ? getStoredAccessToken() : accessToken;
+    }
+
+    let res = await send(accessToken);
     if (res.status === 401 && (await refreshTokens())) {
       res = await send(getStoredAccessToken());
     }
