@@ -119,8 +119,9 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 function accessTokenNeedsRefresh(token: string | null): boolean {
   if (!token) return true;
   const payload = decodeJwtPayload(token);
+  if (!payload) return true;
   const exp = payload?.exp;
-  if (typeof exp !== "number") return false;
+  if (typeof exp !== "number") return true;
   const refreshAt = exp - ACCESS_TOKEN_REFRESH_BUFFER_SECONDS;
   return refreshAt <= Math.floor(Date.now() / 1000);
 }
@@ -236,6 +237,9 @@ function modeToStorage(user: SessionUser): void {
 }
 
 export async function fetchSessionBootstrap(): Promise<SessionBootstrap> {
+  if (getStoredRefreshToken()) {
+    await refreshTokens();
+  }
   const meRes = await authFetch("/v1/me");
   if (!meRes || !meRes.ok) {
     throw new Error(meRes ? await parseApiError(meRes) : "Could not reach API");
