@@ -33,6 +33,7 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
               { href: "/admin/fee-settings", label: "Fee Settings" },
             ]
           : []),
+        { href: "/trade-log", label: "Trade Log" },
         { href: "/onboarding", label: "Setup" },
       ].map((item) => ({
         ...item,
