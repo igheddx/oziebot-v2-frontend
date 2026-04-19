@@ -10,9 +10,21 @@ type TradeLogEvent = {
   symbol: string;
   event_type: string;
   message: string;
+  source?: string;
+  details?: Record<string, string | number | boolean | null | undefined>;
 };
 
 const POLL_MS = 4000;
+
+function formatDetailLabel(key: string) {
+  return key.replaceAll("_", " ");
+}
+
+function formatDetailValue(value: string | number | boolean | null | undefined) {
+  if (typeof value === "boolean") return value ? "yes" : "no";
+  if (value == null) return "n/a";
+  return String(value);
+}
 
 export default function TradeLogPage() {
   const [events, setEvents] = useState<TradeLogEvent[]>([]);
@@ -129,8 +141,22 @@ export default function TradeLogPage() {
                     <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
                     <span>{event.symbol}</span>
                     <span>{event.event_type.replaceAll("_", " ")}</span>
+                    <span>{event.source ?? "coinbase"}</span>
                   </div>
                   <p className="mt-1 text-sm text-emerald-50">{event.message}</p>
+                  {event.details && Object.keys(event.details).length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-emerald-100/80">
+                      {Object.entries(event.details).map(([key, value]) => (
+                        <span
+                          key={key}
+                          className="rounded-full border border-emerald-500/15 bg-black/40 px-2 py-1"
+                        >
+                          <span className="text-emerald-300/65">{formatDetailLabel(key)}:</span>{" "}
+                          {formatDetailValue(value)}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
