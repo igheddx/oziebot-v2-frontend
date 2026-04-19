@@ -33,7 +33,7 @@ export function MobileTabbar() {
   }, [pathname]);
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur">
+    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur md:hidden">
       <ul
         className="mx-auto grid max-w-lg gap-1"
         style={{ gridTemplateColumns: `repeat(${links.length}, minmax(0, 1fr))` }}

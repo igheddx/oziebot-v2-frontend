@@ -1,8 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState } from "react";
 
 import { useAuth } from "@/components/providers/auth-provider";
+import logo from "@/images/oziebot-logo.png";
 
 function emailLooksValid(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -42,11 +44,21 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center px-5 py-10 sm:px-7">
-      <section className="oz-panel p-6 sm:p-7">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Oziebot</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Welcome Back</h1>
-        <p className="mt-2 text-sm text-muted">Log in to continue to your trading dashboard.</p>
+    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-4 py-8 sm:max-w-lg sm:px-6 sm:py-10">
+      <section className="oz-panel p-5 sm:p-7">
+        <div className="flex flex-col items-center text-center">
+          <Image
+            src={logo}
+            alt="Oziebot"
+            priority
+            className="h-auto w-44 sm:w-52"
+            sizes="(min-width: 640px) 208px, 176px"
+          />
+          <h1 className="mt-4 text-3xl font-semibold tracking-tight">Welcome Back</h1>
+          <p className="mt-2 max-w-sm text-sm text-muted">
+            Log in to continue to your trading dashboard.
+          </p>
+        </div>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           <div className="space-y-2">

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -7,6 +8,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { MobileTabbar } from "@/components/nav/mobile-tabbar";
 import { ModeBadge, ModeToggle } from "@/components/dashboard/mode-toggle";
 import { useAuth } from "@/components/providers/auth-provider";
+import logo from "@/images/oziebot-logo.png";
 
 type AppShellProps = {
   title: string;
@@ -53,12 +55,21 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
   }, [pathname, queryString]);
 
   return (
-    <div className="mx-auto min-h-dvh max-w-lg px-4 pb-24 pt-4 sm:px-6">
-      <header className="mb-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">Oziebot</p>
-            <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+    <div className="mx-auto min-h-dvh w-full max-w-6xl px-4 pb-24 pt-4 sm:px-6 sm:pt-6 md:pb-8 lg:px-8">
+      <header className="mb-4 space-y-3 sm:mb-6">
+        <div className="flex items-start justify-between gap-3 sm:gap-4">
+          <div className="min-w-0 flex-1">
+            <Link href={queryString ? `/dashboard?${queryString}` : "/dashboard"} className="inline-flex">
+              <Image
+                src={logo}
+                alt="Oziebot"
+                priority
+                className="h-auto w-32 sm:w-36 lg:w-40"
+                sizes="(min-width: 1024px) 160px, (min-width: 640px) 144px, 128px"
+              />
+            </Link>
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
+            {subtitle ? <p className="mt-1 max-w-3xl text-sm text-muted sm:text-[15px]">{subtitle}</p> : null}
           </div>
           <div className="flex items-center gap-2">
             {showModeToggle ? <ModeBadge /> : null}
@@ -79,7 +90,6 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
             </button>
           </div>
         </div>
-        {subtitle ? <p className="text-sm text-muted">{subtitle}</p> : null}
       </header>
       <main className="space-y-4">{children}</main>
       {drawerOpen ? (

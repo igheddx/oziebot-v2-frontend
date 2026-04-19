@@ -31,6 +31,7 @@ body {
     var(--background);
   color: var(--foreground);
   font-family: var(--font-space-grotesk), system-ui, sans-serif;
+  overflow-x: hidden;
 }
 
 * {
