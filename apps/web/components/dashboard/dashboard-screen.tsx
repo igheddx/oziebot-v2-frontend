@@ -14,6 +14,10 @@ function formatMoney(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(value);
 }
 
+function formatStageLabel(value: string) {
+  return value.replaceAll("_", " ");
+}
+
 export function DashboardScreen() {
   const { mode } = useTradingMode();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -151,6 +155,90 @@ export function DashboardScreen() {
                       <span className="font-semibold text-foreground">{formatMoney(row.fees)}</span>
                     </div>
                   ))}
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Trade Blockers</h2>
+            <div className="grid grid-cols-2 gap-2">
+              <article className="oz-panel p-3">
+                <p className="text-[11px] uppercase tracking-wide text-muted">Recent Rejections</p>
+                <p className="mt-1 text-base font-semibold text-foreground">
+                  {summary.rejectionDiagnostics.totalRejected}
+                </p>
+              </article>
+              {summary.rejectionDiagnostics.byStage.slice(0, 3).map((row) => (
+                <article key={row.stage} className="oz-panel p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-muted">
+                    {formatStageLabel(row.stage)}
+                  </p>
+                  <p className="mt-1 text-base font-semibold text-foreground">{row.count}</p>
+                </article>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <article className="oz-panel p-3">
+                <p className="text-[11px] uppercase tracking-wide text-muted">Top Rejection Reasons</p>
+                <div className="mt-2 space-y-2">
+                  {summary.rejectionDiagnostics.breakdown.length === 0 ? (
+                    <p className="text-sm text-muted">No persisted rejection reasons in this mode yet.</p>
+                  ) : (
+                    summary.rejectionDiagnostics.breakdown.map((row) => (
+                      <div key={`${row.stage}-${row.reasonCode}`} className="rounded-lg bg-surface px-3 py-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{row.reasonCode}</p>
+                            <p className="text-xs uppercase tracking-wide text-muted">
+                              {formatStageLabel(row.stage)}
+                            </p>
+                          </div>
+                          <span className="rounded-full border border-border px-2 py-1 text-[10px] font-semibold uppercase text-muted">
+                            {row.count}
+                          </span>
+                        </div>
+                        {row.latestDetail ? (
+                          <p className="mt-2 text-xs text-muted">{row.latestDetail}</p>
+                        ) : null}
+                        <p className="mt-2 text-[11px] text-muted">
+                          {[row.strategies.join(", "), row.symbols.join(", ")]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </article>
+              <article className="oz-panel p-3">
+                <p className="text-[11px] uppercase tracking-wide text-muted">Latest Rejections</p>
+                <div className="mt-2 space-y-2">
+                  {summary.rejectionDiagnostics.recent.length === 0 ? (
+                    <p className="text-sm text-muted">No recent persisted rejection events in this mode.</p>
+                  ) : (
+                    summary.rejectionDiagnostics.recent.map((row, index) => (
+                      <div
+                        key={`${row.stage}-${row.reasonCode}-${row.createdAt}-${index}`}
+                        className="rounded-lg bg-surface px-3 py-2"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-foreground">
+                            {row.symbol ?? "Unknown symbol"}
+                          </p>
+                          <span className="text-[10px] uppercase tracking-wide text-muted">
+                            {formatStageLabel(row.stage)}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-muted">
+                          {[row.strategy, row.reasonCode].filter(Boolean).join(" · ")}
+                        </p>
+                        {row.reasonDetail ? (
+                          <p className="mt-2 text-xs text-muted">{row.reasonDetail}</p>
+                        ) : null}
+                      </div>
+                    ))
+                  )}
                 </div>
               </article>
             </div>

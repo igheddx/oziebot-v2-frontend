@@ -52,6 +52,27 @@ export type DashboardSummary = {
     skippedTradesDueToFees: number;
     paperLiveComparison: Record<TradingMode, { fees: number; netPnl: number }>;
   };
+  rejectionDiagnostics: {
+    totalRejected: number;
+    byStage: Array<{ stage: string; count: number }>;
+    breakdown: Array<{
+      stage: string;
+      reasonCode: string;
+      count: number;
+      lastSeenAt: string | null;
+      latestDetail: string | null;
+      strategies: string[];
+      symbols: string[];
+    }>;
+    recent: Array<{
+      stage: string;
+      reasonCode: string;
+      reasonDetail: string | null;
+      strategy: string | null;
+      symbol: string | null;
+      createdAt: string | null;
+    }>;
+  };
 };
 
 export type TokenItem = {

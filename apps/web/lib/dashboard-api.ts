@@ -154,7 +154,7 @@ export async function getDashboardSummary(mode: TradingMode): Promise<DashboardS
       positions: [],
       activeTrades: [],
       recentActivity: [],
-      feeAnalytics: {
+        feeAnalytics: {
         grossPnl: 0,
         netPnl: 0,
         totalFeesToday: 0,
@@ -168,12 +168,18 @@ export async function getDashboardSummary(mode: TradingMode): Promise<DashboardS
         avgEstimatedSlippageBps: 0,
         avgNetEdgeAtEntryBps: 0,
         skippedTradesDueToFees: 0,
-        paperLiveComparison: {
-          paper: { fees: 0, netPnl: 0 },
-          live: { fees: 0, netPnl: 0 },
+          paperLiveComparison: {
+            paper: { fees: 0, netPnl: 0 },
+            live: { fees: 0, netPnl: 0 },
+          },
         },
-      },
-    };
+        rejectionDiagnostics: {
+          totalRejected: 0,
+          byStage: [],
+          breakdown: [],
+          recent: [],
+        },
+      };
   }
   return {
     availableBalance: payload.availableBalance ?? payload.portfolioValue,
@@ -204,6 +210,12 @@ export async function getDashboardSummary(mode: TradingMode): Promise<DashboardS
         paper: { fees: 0, netPnl: 0 },
         live: { fees: 0, netPnl: 0 },
       },
+    },
+    rejectionDiagnostics: payload.rejectionDiagnostics ?? {
+      totalRejected: 0,
+      byStage: [],
+      breakdown: [],
+      recent: [],
     },
   };
 }

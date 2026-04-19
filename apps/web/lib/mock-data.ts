@@ -122,6 +122,52 @@ export function mockDashboard(mode: TradingMode): DashboardSummary {
         live: { fees: 221.9, netPnl: 1248.11 },
       },
     },
+    rejectionDiagnostics: {
+      totalRejected: isLive ? 12 : 5,
+      byStage: [
+        { stage: "risk", count: isLive ? 6 : 2 },
+        { stage: "suppression", count: isLive ? 4 : 2 },
+        { stage: "execution", count: isLive ? 2 : 1 },
+      ],
+      breakdown: [
+        {
+          stage: "risk",
+          reasonCode: "policy",
+          count: isLive ? 4 : 2,
+          lastSeenAt: new Date().toISOString(),
+          latestDetail: "fee_economics: Expected net edge below threshold",
+          strategies: ["momentum", "reversion"],
+          symbols: ["BTC-USD", "ETH-USD"],
+        },
+        {
+          stage: "suppression",
+          reasonCode: "max_open_positions reached",
+          count: isLive ? 3 : 1,
+          lastSeenAt: new Date().toISOString(),
+          latestDetail: "Strategy suppression blocked new buy",
+          strategies: ["day_trading"],
+          symbols: ["SOL-USD"],
+        },
+      ],
+      recent: [
+        {
+          stage: "execution",
+          reasonCode: "coinbase_connection",
+          reasonDetail: "Coinbase connection is not trade-enabled",
+          strategy: "dca",
+          symbol: "SOL-USD",
+          createdAt: new Date().toISOString(),
+        },
+        {
+          stage: "risk",
+          reasonCode: "policy",
+          reasonDetail: "fee_economics: Expected net edge below threshold",
+          strategy: "momentum",
+          symbol: "BTC-USD",
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    },
   };
 }
 
