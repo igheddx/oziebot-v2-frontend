@@ -18,12 +18,14 @@ const ibmPlexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "Oziebot",
   description: "Multi-tenant trading console",
+  manifest: "/manifest.webmanifest",
   icons: {
     icon: [
-      { url: "/images/oziebot_favicon.svg", type: "image/svg+xml" },
-      { url: "/favicon.ico", sizes: "any" },
+      { url: "/oziebot_favicon.svg", type: "image/svg+xml", sizes: "any" },
+      { url: "/oziebot-favicon.png", type: "image/png", sizes: "1024x1024" },
     ],
-    shortcut: [{ url: "/images/oziebot_favicon.svg", type: "image/svg+xml" }],
+    shortcut: [{ url: "/oziebot-favicon.png", type: "image/png" }],
+    apple: [{ url: "/apple-touch-icon.png", type: "image/png", sizes: "1024x1024" }],
   },
   appleWebApp: {
     capable: true,

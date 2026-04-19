@@ -1,0 +1,16 @@
+{
+  "name": "Oziebot",
+  "short_name": "Oziebot",
+  "description": "Multi-tenant trading console",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "icons": [
+    {
+      "src": "/oziebot-favicon.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    }
+  ]
+}
