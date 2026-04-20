@@ -27,12 +27,13 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
   const navLinks = useMemo(
     () =>
       [
-        ...(isRootAdmin
-          ? [
-              { href: "/admin/token-policy", label: "Admin" },
-              { href: "/admin/fee-settings", label: "Fee Settings" },
-            ]
-          : []),
+         ...(isRootAdmin
+           ? [
+               { href: "/admin/token-policy", label: "Admin" },
+               { href: "/admin/fee-settings", label: "Fee Settings" },
+             ]
+           : []),
+        { href: "/analytics", label: "Analytics" },
         { href: "/trade-log", label: "Trade Log" },
         { href: "/onboarding", label: "Setup" },
       ].map((item) => ({
