@@ -21,11 +21,18 @@ function formatStageLabel(value: string) {
 export function DashboardScreen() {
   const { mode } = useTradingMode();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
+    setError(null);
     getDashboardSummary(mode).then((data) => {
-      if (mounted) setSummary(data);
+      if (!mounted) return;
+      if (!data) {
+        setError("Dashboard data is temporarily unavailable. Your trades and balances were not deleted.");
+        return;
+      }
+      setSummary(data);
     });
     return () => {
       mounted = false;
@@ -55,21 +62,32 @@ export function DashboardScreen() {
 
   return (
     <AppShell title="Dashboard" subtitle="Portfolio, positions, and trades filtered by current mode.">
+      {error ? (
+        <section className="oz-panel border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+          {error}
+        </section>
+      ) : null}
       {!summary ? (
         <>
-          <section className="grid grid-cols-2 gap-2">
-            <CardSkeleton />
-            <CardSkeleton />
-            <CardSkeleton />
-            <CardSkeleton />
-          </section>
-          <div className="oz-panel p-4">
-            <Skeleton className="h-3 w-24" />
-            <Skeleton className="mt-3 h-32 w-full" />
-          </div>
-          <RowSkeleton />
-          <RowSkeleton />
-          <RowSkeleton />
+          {error ? (
+            <section className="oz-panel p-4 text-sm text-muted">Dashboard unavailable right now.</section>
+          ) : (
+            <>
+              <section className="grid grid-cols-2 gap-2">
+                <CardSkeleton />
+                <CardSkeleton />
+                <CardSkeleton />
+                <CardSkeleton />
+              </section>
+              <div className="oz-panel p-4">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="mt-3 h-32 w-full" />
+              </div>
+              <RowSkeleton />
+              <RowSkeleton />
+              <RowSkeleton />
+            </>
+          )}
         </>
       ) : (
         <>

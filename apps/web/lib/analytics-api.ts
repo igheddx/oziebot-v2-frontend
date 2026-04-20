@@ -8,53 +8,10 @@ type AnalyticsOptions = {
   rangeDays?: number;
 };
 
-function emptyAnalytics(mode: TradingMode): ReviewAnalyticsPayload {
-  return {
-    filters: {
-      tradingMode: mode,
-      strategyName: null,
-      symbol: null,
-      startAt: null,
-      endAt: null,
-    },
-    summary: {
-      evaluated: 0,
-      emitted: 0,
-      reduced: 0,
-      rejected: 0,
-      executed: 0,
-      profitable: 0,
-      rejectionRatePct: 0,
-      executionRatePct: 0,
-      profitabilityRatePct: 0,
-      totalRealizedPnl: 0,
-      totalFees: 0,
-      avgSlippagePct: 0,
-      avgHoldMinutes: 0,
-      overFilteringFlag: false,
-    },
-    signalFunnel: [],
-    strategyPerformance: [],
-    tokenPerformance: [],
-    pairPerformance: [],
-    rejectionBreakdown: {
-      totalRejected: 0,
-      byStage: [],
-      rows: [],
-    },
-    paperLiveComparison: {
-      overview: [],
-      strategies: [],
-    },
-    availableStrategies: [],
-    availableSymbols: [],
-  };
-}
-
 export async function getTradeReviewAnalytics(
   mode: TradingMode,
   options: AnalyticsOptions = {},
-): Promise<ReviewAnalyticsPayload> {
+): Promise<ReviewAnalyticsPayload | null> {
   const params = new URLSearchParams();
   params.set("trading_mode", mode);
   if (options.strategyName) params.set("strategy_name", options.strategyName);
@@ -65,6 +22,6 @@ export async function getTradeReviewAnalytics(
   }
 
   const res = await authFetch(`/v1/me/analytics?${params.toString()}`);
-  if (!res || !res.ok) return emptyAnalytics(mode);
+  if (!res || !res.ok) return null;
   return (await res.json()) as ReviewAnalyticsPayload;
 }

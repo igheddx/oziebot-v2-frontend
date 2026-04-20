@@ -38,18 +38,25 @@ function matrixTone(row: AnalyticsRow) {
 export default function AnalyticsPage() {
   const { mode } = useTradingMode();
   const [analytics, setAnalytics] = useState<ReviewAnalyticsPayload | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [strategyFilter, setStrategyFilter] = useState("");
   const [symbolFilter, setSymbolFilter] = useState("");
   const [rangeDays, setRangeDays] = useState(30);
 
   useEffect(() => {
     let mounted = true;
+    setError(null);
     getTradeReviewAnalytics(mode, {
       strategyName: strategyFilter || undefined,
       symbol: symbolFilter || undefined,
       rangeDays,
     }).then((payload) => {
-      if (mounted) setAnalytics(payload);
+      if (!mounted) return;
+      if (!payload) {
+        setError("Analytics is temporarily unavailable. Existing trade data is still intact.");
+        return;
+      }
+      setAnalytics(payload);
     });
     return () => {
       mounted = false;
@@ -97,9 +104,14 @@ export default function AnalyticsPage() {
       title="Analytics Review"
       subtitle="Review the signal funnel, blockers, and strategy/token performance without changing live decisioning."
     >
+      {error ? (
+        <section className="oz-panel border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+          {error}
+        </section>
+      ) : null}
       {!analytics ? (
         <section className="space-y-3">
-          <div className="oz-panel p-4">Loading analytics...</div>
+          <div className="oz-panel p-4">{error ? "Analytics unavailable." : "Loading analytics..."}</div>
         </section>
       ) : (
         <>

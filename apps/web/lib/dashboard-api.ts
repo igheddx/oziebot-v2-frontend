@@ -140,47 +140,9 @@ export async function upsertCoinbaseConnection(
   return { connection: mapCoinbaseConnection(payload) };
 }
 
-export async function getDashboardSummary(mode: TradingMode): Promise<DashboardSummary> {
+export async function getDashboardSummary(mode: TradingMode): Promise<DashboardSummary | null> {
   const payload = await fetchJson<DashboardSummary>("/v1/me/dashboard", { mode });
-  if (!payload) {
-    return {
-      availableBalance: 0,
-      portfolioValue: 0,
-      pnlValue: 0,
-      pnlPercent: 0,
-      gainLossLabel: "P&L",
-      growth: [0, 0, 0, 0, 0, 0, 0, 0],
-      enabledStrategies: [],
-      positions: [],
-      activeTrades: [],
-      recentActivity: [],
-        feeAnalytics: {
-        grossPnl: 0,
-        netPnl: 0,
-        totalFeesToday: 0,
-        totalFeesWeek: 0,
-        totalFeesMonth: 0,
-        feesByStrategy: [],
-        feesBySymbol: [],
-        makerCount: 0,
-        takerCount: 0,
-        mixedCount: 0,
-        avgEstimatedSlippageBps: 0,
-        avgNetEdgeAtEntryBps: 0,
-        skippedTradesDueToFees: 0,
-          paperLiveComparison: {
-            paper: { fees: 0, netPnl: 0 },
-            live: { fees: 0, netPnl: 0 },
-          },
-        },
-        rejectionDiagnostics: {
-          totalRejected: 0,
-          byStage: [],
-          breakdown: [],
-          recent: [],
-        },
-      };
-  }
+  if (!payload) return null;
   return {
     availableBalance: payload.availableBalance ?? payload.portfolioValue,
     portfolioValue: payload.portfolioValue,
