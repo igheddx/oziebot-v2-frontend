@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { GrowthChart } from "@/components/dashboard/growth-chart";
@@ -22,22 +22,32 @@ export function DashboardScreen() {
   const { mode } = useTradingMode();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
+  const loadSummary = useCallback(async () => {
     setError(null);
-    getDashboardSummary(mode).then((data) => {
-      if (!mounted) return;
+    setIsRefreshing(true);
+    try {
+      const data = await getDashboardSummary(mode);
       if (!data) {
         setError("Dashboard data is temporarily unavailable. Your trades and balances were not deleted.");
         return;
       }
       setSummary(data);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    let mounted = true;
+    void loadSummary().then(() => {
+      if (!mounted) return;
     });
     return () => {
       mounted = false;
     };
-  }, [mode]);
+  }, [loadSummary]);
 
   const cards = useMemo(() => {
     if (!summary) return [];
@@ -67,6 +77,16 @@ export function DashboardScreen() {
           {error}
         </section>
       ) : null}
+      <section className="flex items-center justify-end">
+        <button
+          type="button"
+          className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-muted disabled:opacity-60"
+          onClick={() => void loadSummary()}
+          disabled={isRefreshing}
+        >
+          {isRefreshing ? "Refreshing..." : "Refresh"}
+        </button>
+      </section>
       {!summary ? (
         <>
           {error ? (
