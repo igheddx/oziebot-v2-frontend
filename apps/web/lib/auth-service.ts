@@ -27,6 +27,11 @@ type ApiErrorShape = {
   detail?: unknown;
 };
 
+type AuthFetchBehavior = {
+  clearSessionOn401?: boolean;
+  eagerRefresh?: boolean;
+};
+
 function isAuth401Response(payload: ApiErrorShape): boolean {
   if (typeof payload.detail === "string") {
     const detail = payload.detail.toLowerCase();
@@ -191,7 +196,12 @@ export async function refreshTokens(): Promise<boolean> {
   }
 }
 
-export async function authFetch(path: string, init: RequestInit = {}): Promise<Response | null> {
+export async function authFetch(
+  path: string,
+  init: RequestInit = {},
+  behavior: AuthFetchBehavior = {},
+): Promise<Response | null> {
+  const { clearSessionOn401 = true, eagerRefresh = true } = behavior;
   const baseHeaders = withRequestId(new Headers(init.headers));
   if (!baseHeaders.has("Content-Type")) {
     baseHeaders.set("Content-Type", "application/json");
@@ -210,7 +220,7 @@ export async function authFetch(path: string, init: RequestInit = {}): Promise<R
 
   try {
     let accessToken = getStoredAccessToken();
-    if (accessTokenNeedsRefresh(accessToken) && getStoredRefreshToken()) {
+    if (eagerRefresh && accessTokenNeedsRefresh(accessToken) && getStoredRefreshToken()) {
       const refreshed = await refreshTokens();
       accessToken = refreshed ? getStoredAccessToken() : accessToken;
     }
@@ -219,7 +229,7 @@ export async function authFetch(path: string, init: RequestInit = {}): Promise<R
     if (res.status === 401 && (await refreshTokens())) {
       res = await send(getStoredAccessToken());
     }
-    if (res.status === 401) {
+    if (clearSessionOn401 && res.status === 401) {
       let shouldClear = true;
       try {
         const payload = (await res.clone().json()) as ApiErrorShape;
@@ -253,10 +263,7 @@ function modeToStorage(user: SessionUser): void {
 }
 
 export async function fetchSessionBootstrap(): Promise<SessionBootstrap> {
-  if (getStoredRefreshToken()) {
-    await refreshTokens();
-  }
-  const meRes = await authFetch("/v1/me");
+  const meRes = await authFetch("/v1/me", undefined, { eagerRefresh: false });
   if (!meRes || !meRes.ok) {
     throw new Error(meRes ? await parseApiError(meRes) : "Could not reach API");
   }
@@ -265,8 +272,8 @@ export async function fetchSessionBootstrap(): Promise<SessionBootstrap> {
   const hasTenantContext = user.tenants.length > 0;
   const [billingRes, coinbaseRes] = hasTenantContext
     ? await Promise.all([
-        authFetch("/v1/billing/summary"),
-        authFetch("/v1/integrations/coinbase/status"),
+        authFetch("/v1/billing/summary", undefined, { clearSessionOn401: false }),
+        authFetch("/v1/integrations/coinbase/status", undefined, { clearSessionOn401: false }),
       ])
     : [null, null];
 
