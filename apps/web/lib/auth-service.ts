@@ -22,6 +22,7 @@ export const TRADING_MODE_KEY = "oziebot:trading-mode";
 const AUTH_MARKER_COOKIE = "oziebot_auth";
 const ACCESS_TOKEN_REFRESH_BUFFER_SECONDS = 30;
 const REQUEST_ID_HEADER = "X-Oziebot-Request-Id";
+let refreshInFlight: Promise<boolean> | null = null;
 
 type ApiErrorShape = {
   detail?: unknown;
@@ -183,14 +184,31 @@ export async function login(email: string, password: string): Promise<TokenPair>
 }
 
 export async function refreshTokens(): Promise<boolean> {
-  const refresh = getStoredRefreshToken();
-  if (!refresh) return false;
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    const refresh = getStoredRefreshToken();
+    if (!refresh) return false;
+    try {
+      const tokens = await postJson<{ refresh_token: string }, TokenPair>("/v1/auth/refresh", {
+        refresh_token: refresh,
+      });
+      storeTokenPair(tokens);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
   try {
-    const tokens = await postJson<{ refresh_token: string }, TokenPair>("/v1/auth/refresh", {
-      refresh_token: refresh,
-    });
-    storeTokenPair(tokens);
-    return true;
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
+  }
+}
+
+async function waitForRefreshIfPresent(): Promise<boolean> {
+  if (!refreshInFlight) return false;
+  try {
+    return await refreshInFlight;
   } catch {
     return false;
   }
@@ -226,8 +244,11 @@ export async function authFetch(
     }
 
     let res = await send(accessToken);
-    if (res.status === 401 && (await refreshTokens())) {
-      res = await send(getStoredAccessToken());
+    if (res.status === 401) {
+      const refreshed = (await waitForRefreshIfPresent()) || (await refreshTokens());
+      if (refreshed) {
+        res = await send(getStoredAccessToken());
+      }
     }
     if (clearSessionOn401 && res.status === 401) {
       let shouldClear = true;
