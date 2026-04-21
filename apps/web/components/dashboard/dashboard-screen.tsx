@@ -32,7 +32,10 @@ export function DashboardScreen() {
       setDetailsError(null);
       setIsRefreshing(true);
       try {
-        const nextOverview = await getDashboardOverview(mode, { forceRefresh });
+        const [nextOverview, nextDetails] = await Promise.all([
+          getDashboardOverview(mode, { forceRefresh }),
+          getDashboardDetails(mode, { forceRefresh }),
+        ]);
         if (!nextOverview) {
           setOverview(null);
           setDetails(null);
@@ -41,13 +44,16 @@ export function DashboardScreen() {
         }
         setOverview(nextOverview);
 
-        const nextDetails = await getDashboardDetails(mode, { forceRefresh });
         if (!nextDetails) {
           setDetails(null);
           setDetailsError("Detailed dashboard panels are temporarily unavailable.");
           return;
         }
         setDetails(nextDetails);
+      } catch {
+        setOverview(null);
+        setDetails(null);
+        setError("Dashboard data is temporarily unavailable. Your trades and balances were not deleted.");
       } finally {
         setIsRefreshing(false);
       }
