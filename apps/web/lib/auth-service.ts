@@ -21,6 +21,7 @@ export const REFRESH_TOKEN_KEY = "oziebot:refresh-token";
 export const TRADING_MODE_KEY = "oziebot:trading-mode";
 const AUTH_MARKER_COOKIE = "oziebot_auth";
 const ACCESS_TOKEN_REFRESH_BUFFER_SECONDS = 30;
+const REQUEST_ID_HEADER = "X-Oziebot-Request-Id";
 
 type ApiErrorShape = {
   detail?: unknown;
@@ -102,6 +103,20 @@ function toApiUrl(path: string): string {
   return `${resolveApiBase()}${path}`;
 }
 
+function generateRequestId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `req-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function withRequestId(headers: Headers): Headers {
+  if (!headers.has(REQUEST_ID_HEADER)) {
+    headers.set(REQUEST_ID_HEADER, generateRequestId());
+  }
+  return headers;
+}
+
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
   if (!canUseBrowserStorage()) return null;
   const parts = token.split(".");
@@ -142,10 +157,11 @@ async function parseApiError(res: Response): Promise<string> {
 }
 
 async function postJson<TReq extends Record<string, unknown>, TRes>(path: string, body: TReq): Promise<TRes> {
+  const headers = withRequestId(new Headers({ "Content-Type": "application/json" }));
   const res = await fetch(toApiUrl(path), {
     method: "POST",
     cache: "no-store",
-    headers: { "Content-Type": "application/json" },
+    headers: Object.fromEntries(headers.entries()),
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(await parseApiError(res));
@@ -176,7 +192,7 @@ export async function refreshTokens(): Promise<boolean> {
 }
 
 export async function authFetch(path: string, init: RequestInit = {}): Promise<Response | null> {
-  const baseHeaders = new Headers(init.headers);
+  const baseHeaders = withRequestId(new Headers(init.headers));
   if (!baseHeaders.has("Content-Type")) {
     baseHeaders.set("Content-Type", "application/json");
   }
@@ -273,9 +289,10 @@ export async function fetchSessionBootstrap(): Promise<SessionBootstrap> {
 export async function logout(): Promise<void> {
   const refresh = getStoredRefreshToken();
   if (refresh) {
+    const headers = withRequestId(new Headers({ "Content-Type": "application/json" }));
     await fetch(toApiUrl("/v1/auth/logout"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: Object.fromEntries(headers.entries()),
       body: JSON.stringify({ refresh_token: refresh }),
     }).catch(() => {
       // Best effort only.
