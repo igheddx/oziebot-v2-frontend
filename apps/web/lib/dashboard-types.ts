@@ -1,12 +1,21 @@
 export type TradingMode = "paper" | "live";
 
-export type DashboardSummary = {
+export type DashboardOverview = {
   availableBalance: number;
   portfolioValue: number;
   pnlValue: number;
   pnlPercent: number;
   gainLossLabel: string;
   growth: number[];
+  positionsCount: number;
+  activeTradesCount: number;
+  recentActivityCount: number;
+  totalFeesMonth: number;
+  avgNetEdgeAtEntryBps: number;
+  totalRejected: number;
+};
+
+export type DashboardDetails = {
   enabledStrategies: Array<{ id: string; name: string; enabled: boolean; allocationPct: number }>;
   positions: Array<{
     id: string;
@@ -74,6 +83,8 @@ export type DashboardSummary = {
     }>;
   };
 };
+
+export type DashboardSummary = DashboardOverview & DashboardDetails;
 
 export type TokenItem = {
   id: string;

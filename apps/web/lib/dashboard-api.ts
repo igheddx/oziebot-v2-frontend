@@ -10,6 +10,8 @@ import type {
   AllocationItem,
   BillingSummary,
   CoinbaseConnection,
+  DashboardDetails,
+  DashboardOverview,
   DashboardSummary,
   TokenItem,
   TradingMode,
@@ -24,6 +26,7 @@ type RequestOptions = {
   mode?: TradingMode;
   method?: "GET" | "POST" | "PATCH" | "PUT";
   body?: unknown;
+  forceRefresh?: boolean;
 };
 
 type CoinbaseConnectionPayload = {
@@ -63,8 +66,12 @@ function withModePath(path: string, mode?: TradingMode): string {
 }
 
 async function requestWithAuth(path: string, options: RequestOptions = {}): Promise<Response | null> {
-  const { mode, method = "GET", body } = options;
-  return authFetch(withModePath(path, mode), {
+  const { mode, method = "GET", body, forceRefresh = false } = options;
+  const modePath = withModePath(path, mode);
+  const fullPath = forceRefresh
+    ? `${modePath}${modePath.includes("?") ? "&" : "?"}force_refresh=true`
+    : modePath;
+  return authFetch(fullPath, {
     method,
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -150,6 +157,12 @@ export async function getDashboardSummary(mode: TradingMode): Promise<DashboardS
     pnlPercent: payload.pnlPercent,
     gainLossLabel: payload.gainLossLabel ?? "P&L",
     growth: payload.growth ?? [],
+    positionsCount: payload.positionsCount ?? payload.positions?.length ?? 0,
+    activeTradesCount: payload.activeTradesCount ?? payload.activeTrades?.length ?? 0,
+    recentActivityCount: payload.recentActivityCount ?? payload.recentActivity?.length ?? 0,
+    totalFeesMonth: payload.totalFeesMonth ?? payload.feeAnalytics?.totalFeesMonth ?? 0,
+    avgNetEdgeAtEntryBps: payload.avgNetEdgeAtEntryBps ?? payload.feeAnalytics?.avgNetEdgeAtEntryBps ?? 0,
+    totalRejected: payload.totalRejected ?? payload.rejectionDiagnostics?.totalRejected ?? 0,
     enabledStrategies: payload.enabledStrategies ?? [],
     positions: payload.positions ?? [],
     activeTrades: payload.activeTrades ?? [],
@@ -180,6 +193,26 @@ export async function getDashboardSummary(mode: TradingMode): Promise<DashboardS
       recent: [],
     },
   };
+}
+
+export async function getDashboardOverview(
+  mode: TradingMode,
+  options: { forceRefresh?: boolean } = {},
+): Promise<DashboardOverview | null> {
+  return fetchJson<DashboardOverview>("/v1/me/dashboard/summary", {
+    mode,
+    forceRefresh: options.forceRefresh,
+  });
+}
+
+export async function getDashboardDetails(
+  mode: TradingMode,
+  options: { forceRefresh?: boolean } = {},
+): Promise<DashboardDetails | null> {
+  return fetchJson<DashboardDetails>("/v1/me/dashboard/details", {
+    mode,
+    forceRefresh: options.forceRefresh,
+  });
 }
 
 export async function getTokens(mode: TradingMode): Promise<TokenItem[]> {

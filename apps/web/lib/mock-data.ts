@@ -20,6 +20,12 @@ export function mockDashboard(mode: TradingMode): DashboardSummary {
     pnlPercent: isLive ? 2.42 : 3.46,
     gainLossLabel: isLive ? "Today" : "Session",
     growth: isLive ? baseGrowthLive : baseGrowthPaper,
+    positionsCount: 2,
+    activeTradesCount: 2,
+    recentActivityCount: 3,
+    totalFeesMonth: isLive ? 221.9 : 84.47,
+    avgNetEdgeAtEntryBps: isLive ? 46.8 : 61.4,
+    totalRejected: isLive ? 14 : 6,
     enabledStrategies: [
       { id: "momentum", name: "Momentum", enabled: true, allocationPct: 42 },
       { id: "dca", name: "DCA", enabled: true, allocationPct: 28 },

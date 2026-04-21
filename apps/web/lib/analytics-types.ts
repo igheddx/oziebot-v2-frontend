@@ -119,3 +119,8 @@ export type ReviewAnalyticsPayload = {
   availableStrategies: string[];
   availableSymbols: string[];
 };
+
+export type ReviewAnalyticsSummaryPayload = Pick<
+  ReviewAnalyticsPayload,
+  "filters" | "summary" | "availableStrategies" | "availableSymbols"
+>;
