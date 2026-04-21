@@ -23,6 +23,7 @@ export type DashboardDetails = {
     strategy: string;
     side: "long" | "short";
     quantity: string;
+    entryPrice: number;
     markPrice: number;
     unrealizedPnl: number;
     exposure: number;
@@ -81,6 +82,39 @@ export type DashboardDetails = {
       symbol: string | null;
       createdAt: string | null;
     }>;
+  };
+};
+
+export type DashboardRejections = {
+  windowHours: 1 | 3 | 6 | 24 | 48;
+  skippedTradesDueToFees: number;
+  rejectionDiagnostics: {
+    totalRejected: number;
+    byStage: Array<{ stage: string; count: number }>;
+    breakdown: Array<{
+      stage: string;
+      reasonCode: string;
+      count: number;
+      lastSeenAt: string | null;
+      latestDetail: string | null;
+      strategies: string[];
+      symbols: string[];
+    }>;
+    recent: Array<{
+      stage: string;
+      reasonCode: string;
+      reasonDetail: string | null;
+      strategy: string | null;
+      symbol: string | null;
+      createdAt: string | null;
+    }>;
+  };
+  budget: {
+    windowHours: number;
+    eventLimit: number;
+    startAt: string;
+    endAt: string;
+    capped: boolean;
   };
 };
 

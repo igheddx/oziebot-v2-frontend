@@ -12,6 +12,7 @@ import type {
   CoinbaseConnection,
   DashboardDetails,
   DashboardOverview,
+  DashboardRejections,
   DashboardSummary,
   TokenItem,
   TradingMode,
@@ -210,6 +211,17 @@ export async function getDashboardDetails(
   options: { forceRefresh?: boolean } = {},
 ): Promise<DashboardDetails | null> {
   return fetchJson<DashboardDetails>("/v1/me/dashboard/details", {
+    mode,
+    forceRefresh: options.forceRefresh,
+  });
+}
+
+export async function getDashboardRejections(
+  mode: TradingMode,
+  windowHours: DashboardRejections["windowHours"],
+  options: { forceRefresh?: boolean } = {},
+): Promise<DashboardRejections | null> {
+  return fetchJson<DashboardRejections>(`/v1/me/dashboard/rejections?window_hours=${windowHours}`, {
     mode,
     forceRefresh: options.forceRefresh,
   });

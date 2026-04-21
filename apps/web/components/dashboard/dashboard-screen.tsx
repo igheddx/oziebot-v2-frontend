@@ -6,8 +6,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import { GrowthChart } from "@/components/dashboard/growth-chart";
 import { TradeCardsHybrid } from "@/components/dashboard/trade-cards-hybrid";
 import { useTradingMode } from "@/components/providers/trading-mode-provider";
-import { getDashboardDetails, getDashboardOverview } from "@/lib/dashboard-api";
-import type { DashboardDetails, DashboardOverview } from "@/lib/dashboard-types";
+import { getDashboardDetails, getDashboardOverview, getDashboardRejections } from "@/lib/dashboard-api";
+import type { DashboardDetails, DashboardOverview, DashboardRejections } from "@/lib/dashboard-types";
 import { CardSkeleton, RowSkeleton, Skeleton } from "@/components/ui/skeleton";
 
 function formatMoney(value: number) {
@@ -18,13 +18,37 @@ function formatStageLabel(value: string) {
   return value.replaceAll("_", " ");
 }
 
+const REJECTION_WINDOWS = [1, 3, 6, 24, 48] as const;
+
 export function DashboardScreen() {
   const { mode } = useTradingMode();
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
   const [details, setDetails] = useState<DashboardDetails | null>(null);
+  const [rejections, setRejections] = useState<DashboardRejections | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [rejectionsError, setRejectionsError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [rejectionWindowHours, setRejectionWindowHours] = useState<DashboardRejections["windowHours"]>(24);
+
+  const loadRejections = useCallback(
+    async (forceRefresh = false) => {
+      setRejectionsError(null);
+      try {
+        const nextRejections = await getDashboardRejections(mode, rejectionWindowHours, { forceRefresh });
+        if (!nextRejections) {
+          setRejections(null);
+          setRejectionsError("Trade blockers are temporarily unavailable.");
+          return;
+        }
+        setRejections(nextRejections);
+      } catch {
+        setRejections(null);
+        setRejectionsError("Trade blockers are temporarily unavailable.");
+      }
+    },
+    [mode, rejectionWindowHours],
+  );
 
   const loadDashboard = useCallback(
     async (forceRefresh = false) => {
@@ -47,9 +71,9 @@ export function DashboardScreen() {
         if (!nextDetails) {
           setDetails(null);
           setDetailsError("Detailed dashboard panels are temporarily unavailable.");
-          return;
+        } else {
+          setDetails(nextDetails);
         }
-        setDetails(nextDetails);
       } catch {
         setOverview(null);
         setDetails(null);
@@ -70,6 +94,16 @@ export function DashboardScreen() {
       mounted = false;
     };
   }, [loadDashboard]);
+
+  useEffect(() => {
+    let mounted = true;
+    void loadRejections().then(() => {
+      if (!mounted) return;
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [loadRejections]);
 
   const cards = useMemo(() => {
     if (!overview) return [];
@@ -104,11 +138,20 @@ export function DashboardScreen() {
           {detailsError}
         </section>
       ) : null}
+      {rejectionsError ? (
+        <section className="oz-panel border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+          {rejectionsError}
+        </section>
+      ) : null}
       <section className="flex items-center justify-end">
         <button
           type="button"
           className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-muted disabled:opacity-60"
-          onClick={() => void loadDashboard(true)}
+          onClick={() =>
+            void (async () => {
+              await Promise.all([loadDashboard(true), loadRejections(true)]);
+            })()
+          }
           disabled={isRefreshing}
         >
           {isRefreshing ? "Refreshing..." : "Refresh"}
@@ -160,6 +203,115 @@ export function DashboardScreen() {
 
           <GrowthChart values={overview.growth} positive={overview.pnlValue >= 0} />
 
+          {!rejections ? (
+            rejectionsError ? null : <RowSkeleton />
+          ) : (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+                  Trade Blockers ({rejections.windowHours}h)
+                </h2>
+                <div className="flex flex-wrap gap-2">
+                  {REJECTION_WINDOWS.map((windowHours) => (
+                    <button
+                      key={windowHours}
+                      type="button"
+                      className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+                        rejectionWindowHours === windowHours
+                          ? "border-foreground text-foreground"
+                          : "border-border text-muted"
+                      }`}
+                      onClick={() => setRejectionWindowHours(windowHours)}
+                    >
+                      {windowHours}h
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <article className="oz-panel p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-muted">Recent Rejections</p>
+                  <p className="mt-1 text-base font-semibold text-foreground">
+                    {rejections.rejectionDiagnostics.totalRejected}
+                  </p>
+                </article>
+                <article className="oz-panel p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-muted">Skipped For Fees</p>
+                  <p className="mt-1 text-base font-semibold text-foreground">{rejections.skippedTradesDueToFees}</p>
+                </article>
+                {rejections.rejectionDiagnostics.byStage.slice(0, 2).map((row) => (
+                  <article key={row.stage} className="oz-panel p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-muted">{formatStageLabel(row.stage)}</p>
+                    <p className="mt-1 text-base font-semibold text-foreground">{row.count}</p>
+                  </article>
+                ))}
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <article className="oz-panel p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-muted">Top Rejection Reasons</p>
+                  <div className="mt-2 space-y-2">
+                    {rejections.rejectionDiagnostics.breakdown.length === 0 ? (
+                      <p className="text-sm text-muted">No persisted rejection reasons in this window.</p>
+                    ) : (
+                      rejections.rejectionDiagnostics.breakdown.map((row) => (
+                        <div key={`${row.stage}-${row.reasonCode}`} className="rounded-lg bg-surface px-3 py-2">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-foreground">{row.reasonCode}</p>
+                              <p className="text-xs uppercase tracking-wide text-muted">
+                                {formatStageLabel(row.stage)}
+                              </p>
+                            </div>
+                            <span className="rounded-full border border-border px-2 py-1 text-[10px] font-semibold uppercase text-muted">
+                              {row.count}
+                            </span>
+                          </div>
+                          {row.latestDetail ? <p className="mt-2 text-xs text-muted">{row.latestDetail}</p> : null}
+                          <p className="mt-2 text-[11px] text-muted">
+                            {[row.strategies.join(", "), row.symbols.join(", ")].filter(Boolean).join(" · ")}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </article>
+                <article className="oz-panel p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] uppercase tracking-wide text-muted">Latest Rejections</p>
+                    {rejections.budget.capped ? (
+                      <span className="text-[10px] uppercase tracking-wide text-muted">
+                        Showing latest {rejections.budget.eventLimit}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {rejections.rejectionDiagnostics.recent.length === 0 ? (
+                      <p className="text-sm text-muted">No recent persisted rejection events in this mode.</p>
+                    ) : (
+                      rejections.rejectionDiagnostics.recent.map((row, index) => (
+                        <div
+                          key={`${row.stage}-${row.reasonCode}-${row.createdAt}-${index}`}
+                          className="rounded-lg bg-surface px-3 py-2"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold text-foreground">{row.symbol ?? "Unknown symbol"}</p>
+                            <span className="text-[10px] uppercase tracking-wide text-muted">
+                              {formatStageLabel(row.stage)}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-muted">
+                            {[row.strategy, row.reasonCode].filter(Boolean).join(" · ")}
+                          </p>
+                          {row.reasonDetail ? <p className="mt-2 text-xs text-muted">{row.reasonDetail}</p> : null}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </article>
+              </div>
+            </section>
+          )}
+
           {!details ? (
             <>
               <RowSkeleton />
@@ -177,7 +329,10 @@ export function DashboardScreen() {
                     ["Fees Today", formatMoney(details.feeAnalytics.totalFeesToday)],
                     ["Fees This Week", formatMoney(details.feeAnalytics.totalFeesWeek)],
                     ["Avg Slippage", `${details.feeAnalytics.avgEstimatedSlippageBps.toFixed(1)} bps`],
-                    ["Skipped For Fees", details.feeAnalytics.skippedTradesDueToFees.toString()],
+                    [
+                      "Skipped For Fees",
+                      (rejections?.skippedTradesDueToFees ?? details.feeAnalytics.skippedTradesDueToFees).toString(),
+                    ],
                   ].map(([label, value]) => (
                     <article key={label} className="oz-panel p-3">
                       <p className="text-[11px] uppercase tracking-wide text-muted">{label}</p>
@@ -234,80 +389,6 @@ export function DashboardScreen() {
               </section>
 
               <section className="space-y-3">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Trade Blockers</h2>
-                <div className="grid grid-cols-2 gap-2">
-                  <article className="oz-panel p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-muted">Recent Rejections</p>
-                    <p className="mt-1 text-base font-semibold text-foreground">
-                      {details.rejectionDiagnostics.totalRejected}
-                    </p>
-                  </article>
-                  {details.rejectionDiagnostics.byStage.slice(0, 3).map((row) => (
-                    <article key={row.stage} className="oz-panel p-3">
-                      <p className="text-[11px] uppercase tracking-wide text-muted">{formatStageLabel(row.stage)}</p>
-                      <p className="mt-1 text-base font-semibold text-foreground">{row.count}</p>
-                    </article>
-                  ))}
-                </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <article className="oz-panel p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-muted">Top Rejection Reasons</p>
-                    <div className="mt-2 space-y-2">
-                      {details.rejectionDiagnostics.breakdown.length === 0 ? (
-                        <p className="text-sm text-muted">No persisted rejection reasons in this mode yet.</p>
-                      ) : (
-                        details.rejectionDiagnostics.breakdown.map((row) => (
-                          <div key={`${row.stage}-${row.reasonCode}`} className="rounded-lg bg-surface px-3 py-2">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold text-foreground">{row.reasonCode}</p>
-                                <p className="text-xs uppercase tracking-wide text-muted">
-                                  {formatStageLabel(row.stage)}
-                                </p>
-                              </div>
-                              <span className="rounded-full border border-border px-2 py-1 text-[10px] font-semibold uppercase text-muted">
-                                {row.count}
-                              </span>
-                            </div>
-                            {row.latestDetail ? <p className="mt-2 text-xs text-muted">{row.latestDetail}</p> : null}
-                            <p className="mt-2 text-[11px] text-muted">
-                              {[row.strategies.join(", "), row.symbols.join(", ")].filter(Boolean).join(" · ")}
-                            </p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </article>
-                  <article className="oz-panel p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-muted">Latest Rejections</p>
-                    <div className="mt-2 space-y-2">
-                      {details.rejectionDiagnostics.recent.length === 0 ? (
-                        <p className="text-sm text-muted">No recent persisted rejection events in this mode.</p>
-                      ) : (
-                        details.rejectionDiagnostics.recent.map((row, index) => (
-                          <div
-                            key={`${row.stage}-${row.reasonCode}-${row.createdAt}-${index}`}
-                            className="rounded-lg bg-surface px-3 py-2"
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <p className="text-sm font-semibold text-foreground">{row.symbol ?? "Unknown symbol"}</p>
-                              <span className="text-[10px] uppercase tracking-wide text-muted">
-                                {formatStageLabel(row.stage)}
-                              </span>
-                            </div>
-                            <p className="mt-1 text-xs text-muted">
-                              {[row.strategy, row.reasonCode].filter(Boolean).join(" · ")}
-                            </p>
-                            {row.reasonDetail ? <p className="mt-2 text-xs text-muted">{row.reasonDetail}</p> : null}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </article>
-                </div>
-              </section>
-
-              <section className="space-y-3">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Enabled Strategies</h2>
                 <div className="space-y-2">
                   {details.enabledStrategies
@@ -329,26 +410,33 @@ export function DashboardScreen() {
               <section className="space-y-3">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Active Positions</h2>
                 <div className="space-y-2">
-                  {details.positions.map((position) => (
-                    <article key={position.id} className="oz-panel p-3">
-                      <div className="mb-1 flex items-center justify-between">
-                        <p className="text-sm font-semibold">{position.symbol}</p>
-                        <span className="text-xs text-muted">{position.strategy}</span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 text-xs text-muted">
-                        <span>Qty {position.quantity}</span>
-                        <span className="text-center">${position.markPrice.toLocaleString()}</span>
-                        <span className="text-right">{formatMoney(position.exposure)}</span>
-                      </div>
-                      <p
-                        className={`mt-2 text-sm font-semibold ${
-                          position.unrealizedPnl >= 0 ? "text-positive" : "text-negative"
-                        }`}
-                      >
-                        Unrealized {formatMoney(position.unrealizedPnl)}
-                      </p>
+                  {details.positions.length === 0 ? (
+                    <article className="oz-panel p-3 text-sm text-muted">
+                      No active positions above the dashboard dust threshold right now.
                     </article>
-                  ))}
+                  ) : (
+                    details.positions.map((position) => (
+                      <article key={position.id} className="oz-panel p-3">
+                        <div className="mb-1 flex items-center justify-between">
+                          <p className="text-sm font-semibold">{position.symbol}</p>
+                          <span className="text-xs text-muted">{position.strategy}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs text-muted">
+                          <span>Qty {position.quantity}</span>
+                          <span className="text-right">{formatMoney(position.exposure)}</span>
+                          <span>Entry {formatMoney(position.entryPrice)}</span>
+                          <span className="text-right">Mark {formatMoney(position.markPrice)}</span>
+                        </div>
+                        <p
+                          className={`mt-2 text-sm font-semibold ${
+                            position.unrealizedPnl >= 0 ? "text-positive" : "text-negative"
+                          }`}
+                        >
+                          Unrealized {formatMoney(position.unrealizedPnl)}
+                        </p>
+                      </article>
+                    ))
+                  )}
                 </div>
               </section>
 
