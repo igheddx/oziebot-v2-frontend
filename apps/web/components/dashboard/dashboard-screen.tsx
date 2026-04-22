@@ -10,8 +10,17 @@ import { getDashboardDetails, getDashboardOverview, getDashboardRejections } fro
 import type { DashboardDetails, DashboardOverview, DashboardRejections } from "@/lib/dashboard-types";
 import { CardSkeleton, RowSkeleton, Skeleton } from "@/components/ui/skeleton";
 
+const DISPLAY_EPSILON = 0.005;
+const PAGE_SIZE = 5;
+
+function normalizeDisplayValue(value: number) {
+  return Math.abs(value) < DISPLAY_EPSILON ? 0 : value;
+}
+
 function formatMoney(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(value);
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(
+    normalizeDisplayValue(value),
+  );
 }
 
 function formatStageLabel(value: string) {
@@ -30,6 +39,8 @@ export function DashboardScreen() {
   const [rejectionsError, setRejectionsError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [rejectionWindowHours, setRejectionWindowHours] = useState<DashboardRejections["windowHours"]>(24);
+  const [positionSearch, setPositionSearch] = useState("");
+  const [visiblePositionsCount, setVisiblePositionsCount] = useState(PAGE_SIZE);
 
   const loadRejections = useCallback(
     async (forceRefresh = false) => {
@@ -107,13 +118,14 @@ export function DashboardScreen() {
 
   const cards = useMemo(() => {
     if (!overview) return [];
+    const normalizedPnlValue = normalizeDisplayValue(overview.pnlValue);
     return [
       { label: "Available Balance", value: formatMoney(overview.availableBalance), tone: "neutral" },
       { label: "Portfolio", value: formatMoney(overview.portfolioValue), tone: "neutral" },
       {
         label: overview.gainLossLabel,
-        value: formatMoney(overview.pnlValue),
-        tone: overview.pnlValue >= 0 ? "positive" : "negative",
+        value: formatMoney(normalizedPnlValue),
+        tone: normalizedPnlValue === 0 ? "neutral" : normalizedPnlValue > 0 ? "positive" : "negative",
         detail: `${overview.pnlPercent >= 0 ? "+" : ""}${overview.pnlPercent.toFixed(2)}%`,
       },
       { label: "Active Positions", value: overview.positionsCount.toString(), tone: "neutral" },
@@ -125,6 +137,19 @@ export function DashboardScreen() {
       },
     ];
   }, [overview]);
+
+  const filteredPositions = useMemo(() => {
+    if (!details) return [];
+    const query = positionSearch.trim().toLowerCase();
+    if (!query) return details.positions;
+    return details.positions.filter((position) =>
+      [position.symbol, position.strategy].some((value) => value.toLowerCase().includes(query)),
+    );
+  }, [details, positionSearch]);
+
+  useEffect(() => {
+    setVisiblePositionsCount(PAGE_SIZE);
+  }, [positionSearch, details]);
 
   return (
     <AppShell title="Dashboard" subtitle="Portfolio, positions, and trades filtered by current mode.">
@@ -409,33 +434,67 @@ export function DashboardScreen() {
 
               <section className="space-y-3">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Active Positions</h2>
-                <div className="space-y-2">
+                <div className="space-y-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <input
+                      type="search"
+                      value={positionSearch}
+                      onChange={(event) => setPositionSearch(event.target.value)}
+                      placeholder="Search positions by symbol or strategy"
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted sm:max-w-sm"
+                    />
+                    <p className="text-xs text-muted">
+                      Showing {Math.min(visiblePositionsCount, filteredPositions.length)} of {filteredPositions.length}
+                    </p>
+                  </div>
                   {details.positions.length === 0 ? (
                     <article className="oz-panel p-3 text-sm text-muted">
                       No active positions above the dashboard dust threshold right now.
                     </article>
+                  ) : filteredPositions.length === 0 ? (
+                    <article className="oz-panel p-3 text-sm text-muted">
+                      No active positions match that search.
+                    </article>
                   ) : (
-                    details.positions.map((position) => (
-                      <article key={position.id} className="oz-panel p-3">
-                        <div className="mb-1 flex items-center justify-between">
-                          <p className="text-sm font-semibold">{position.symbol}</p>
-                          <span className="text-xs text-muted">{position.strategy}</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-xs text-muted">
-                          <span>Qty {position.quantity}</span>
-                          <span className="text-right">{formatMoney(position.exposure)}</span>
-                          <span>Entry {formatMoney(position.entryPrice)}</span>
-                          <span className="text-right">Mark {formatMoney(position.markPrice)}</span>
-                        </div>
-                        <p
-                          className={`mt-2 text-sm font-semibold ${
-                            position.unrealizedPnl >= 0 ? "text-positive" : "text-negative"
-                          }`}
+                    <>
+                      {filteredPositions.slice(0, visiblePositionsCount).map((position) => {
+                        const normalizedUnrealizedPnl = normalizeDisplayValue(position.unrealizedPnl);
+                        return (
+                          <article key={position.id} className="oz-panel p-3">
+                            <div className="mb-1 flex items-center justify-between">
+                              <p className="text-sm font-semibold">{position.symbol}</p>
+                              <span className="text-xs text-muted">{position.strategy}</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs text-muted">
+                              <span>Qty {position.quantity}</span>
+                              <span className="text-right">{formatMoney(position.exposure)}</span>
+                              <span>Entry {formatMoney(position.entryPrice)}</span>
+                              <span className="text-right">Mark {formatMoney(position.markPrice)}</span>
+                            </div>
+                            <p
+                              className={`mt-2 text-sm font-semibold ${
+                                normalizedUnrealizedPnl === 0
+                                  ? "text-muted"
+                                  : normalizedUnrealizedPnl > 0
+                                    ? "text-positive"
+                                    : "text-negative"
+                              }`}
+                            >
+                              Unrealized {formatMoney(normalizedUnrealizedPnl)}
+                            </p>
+                          </article>
+                        );
+                      })}
+                      {filteredPositions.length > visiblePositionsCount ? (
+                        <button
+                          type="button"
+                          className="w-full rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted"
+                          onClick={() => setVisiblePositionsCount((count) => count + PAGE_SIZE)}
                         >
-                          Unrealized {formatMoney(position.unrealizedPnl)}
-                        </p>
-                      </article>
-                    ))
+                          Load 5 more positions
+                        </button>
+                      ) : null}
+                    </>
                   )}
                 </div>
               </section>
