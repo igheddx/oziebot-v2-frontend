@@ -119,6 +119,9 @@ export function DashboardScreen() {
   const cards = useMemo(() => {
     if (!overview) return [];
     const normalizedPnlValue = normalizeDisplayValue(overview.pnlValue);
+    const detailPositionsCount = details ? details.positions.length : null;
+    const detailFeesMonth = details?.feeAnalytics.totalFeesMonth ?? null;
+    const detailAvgNetEdge = details?.feeAnalytics.avgNetEdgeAtEntryBps ?? null;
     return [
       { label: "Available Balance", value: formatMoney(overview.availableBalance), tone: "neutral" },
       { label: "Portfolio", value: formatMoney(overview.portfolioValue), tone: "neutral" },
@@ -128,15 +131,23 @@ export function DashboardScreen() {
         tone: normalizedPnlValue === 0 ? "neutral" : normalizedPnlValue > 0 ? "positive" : "negative",
         detail: `${overview.pnlPercent >= 0 ? "+" : ""}${overview.pnlPercent.toFixed(2)}%`,
       },
-      { label: "Active Positions", value: overview.positionsCount.toString(), tone: "neutral" },
-      { label: "Fees (30d)", value: formatMoney(overview.totalFeesMonth), tone: "neutral" },
+      {
+        label: "Active Positions",
+        value: detailPositionsCount === null ? "..." : detailPositionsCount.toString(),
+        tone: "neutral",
+      },
+      {
+        label: "Fees (30d)",
+        value: detailFeesMonth === null ? "..." : formatMoney(detailFeesMonth),
+        tone: "neutral",
+      },
       {
         label: "Avg Net Edge",
-        value: `${overview.avgNetEdgeAtEntryBps.toFixed(1)} bps`,
-        tone: overview.avgNetEdgeAtEntryBps >= 0 ? "positive" : "negative",
+        value: detailAvgNetEdge === null ? "..." : `${detailAvgNetEdge.toFixed(1)} bps`,
+        tone: detailAvgNetEdge === null ? "neutral" : detailAvgNetEdge >= 0 ? "positive" : "negative",
       },
     ];
-  }, [overview]);
+  }, [details, overview]);
 
   const filteredPositions = useMemo(() => {
     if (!details) return [];
