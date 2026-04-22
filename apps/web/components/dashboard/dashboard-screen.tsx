@@ -27,6 +27,20 @@ function formatStageLabel(value: string) {
   return value.replaceAll("_", " ");
 }
 
+function formatTimestamp(value: string | null) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return parsed.toLocaleString();
+}
+
+function formatPositionAge(ageHours: number | null) {
+  if (ageHours == null) return "—";
+  if (ageHours < 1) return `${Math.max(0, Math.round(ageHours * 60))}m`;
+  if (ageHours < 24) return `${ageHours.toFixed(1)}h`;
+  return `${(ageHours / 24).toFixed(1)}d`;
+}
+
 const REJECTION_WINDOWS = [1, 3, 6, 24, 48] as const;
 
 export function DashboardScreen() {
@@ -446,6 +460,9 @@ export function DashboardScreen() {
               <section className="space-y-3">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Active Positions</h2>
                 <div className="space-y-3">
+                  <p className="text-xs text-muted">
+                    Opened = first entry for this position. Last Activity = most recent position update.
+                  </p>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <input
                       type="search"
@@ -481,6 +498,10 @@ export function DashboardScreen() {
                               <span className="text-right">{formatMoney(position.exposure)}</span>
                               <span>Entry {formatMoney(position.entryPrice)}</span>
                               <span className="text-right">Mark {formatMoney(position.markPrice)}</span>
+                              <span>Opened {formatTimestamp(position.openedAt)}</span>
+                              <span className="text-right">Last Activity {formatTimestamp(position.lastTradeAt)}</span>
+                              <span>Open Age {formatPositionAge(position.ageHours)}</span>
+                              <span className="text-right">{position.side.toUpperCase()}</span>
                             </div>
                             <p
                               className={`mt-2 text-sm font-semibold ${

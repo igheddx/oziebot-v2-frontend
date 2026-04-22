@@ -43,6 +43,11 @@ export function mockDashboard(mode: TradingMode): DashboardSummary {
         markPrice: isLive ? 68722 : 68400,
         unrealizedPnl: isLive ? 392 : 281,
         exposure: isLive ? 30237 : 30096,
+        openedAt: "2026-04-22T08:15:00Z",
+        lastTradeAt: "2026-04-22T10:05:00Z",
+        closedAt: null,
+        ageMinutes: 240,
+        ageHours: 4,
       },
       {
         id: "pos-sol",
@@ -54,6 +59,11 @@ export function mockDashboard(mode: TradingMode): DashboardSummary {
         markPrice: isLive ? 169.1 : 171.2,
         unrealizedPnl: isLive ? -54 : 62,
         exposure: isLive ? 14374 : 14552,
+        openedAt: "2026-04-21T18:40:00Z",
+        lastTradeAt: "2026-04-22T07:20:00Z",
+        closedAt: null,
+        ageMinutes: 1180,
+        ageHours: 19.6667,
       },
     ],
     activeTrades: [

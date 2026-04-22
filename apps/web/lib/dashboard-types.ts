@@ -27,6 +27,11 @@ export type DashboardDetails = {
     markPrice: number;
     unrealizedPnl: number;
     exposure: number;
+    openedAt: string | null;
+    lastTradeAt: string | null;
+    closedAt: string | null;
+    ageMinutes: number | null;
+    ageHours: number | null;
   }>;
   activeTrades: Array<{
     id: string;
