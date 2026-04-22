@@ -18,7 +18,7 @@ type AppShellProps = {
 };
 
 export function AppShell({ title, subtitle, children, showModeToggle = true }: AppShellProps) {
-  const { logoutUser, role } = useAuth();
+  const { logoutUser, role, user } = useAuth();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isRootAdmin = role === "root_admin";
@@ -114,7 +114,9 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">Menu</p>
-                <p className="text-sm text-muted">Quick actions and mode controls.</p>
+                <p className="text-sm font-medium text-foreground">{user?.full_name ?? user?.email ?? "Oziebot"}</p>
+                {user?.full_name ? <p className="text-xs text-muted">{user.email}</p> : null}
+                <p className="mt-1 text-sm text-muted">Quick actions and mode controls.</p>
               </div>
               <button
                 type="button"

@@ -38,28 +38,36 @@ export function TradeCardsHybrid({ activeTrades, recent }: TradeCardsHybridProps
   return (
     <section className="space-y-3">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Trades In Progress</h2>
+      <p className="text-xs text-muted">
+        Shows orders that are still pending, open, or partially filled. Filled orders move to Recent Activity, so this
+        section is often empty when execution is fast.
+      </p>
       <div className="space-y-2">
-        {activeTrades.map((trade) => (
-          <article key={trade.id} className="oz-panel p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold">{trade.symbol}</p>
-                <p className="text-xs text-muted">{trade.strategy}</p>
+        {activeTrades.length === 0 ? (
+          <div className="oz-panel p-3 text-sm text-muted">No orders are currently in flight.</div>
+        ) : (
+          activeTrades.map((trade) => (
+            <article key={trade.id} className="oz-panel p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold">{trade.symbol}</p>
+                  <p className="text-xs text-muted">{trade.strategy}</p>
+                </div>
+                <span className="rounded-full border border-border px-2 py-1 text-[10px] font-semibold uppercase text-muted">
+                  {trade.status.replace("_", " ")}
+                </span>
               </div>
-              <span className="rounded-full border border-border px-2 py-1 text-[10px] font-semibold uppercase text-muted">
-                {trade.status.replace("_", " ")}
-              </span>
-            </div>
-            <div className="mb-2 h-2 rounded-full bg-surface">
-              <div className="h-2 rounded-full bg-emerald-400" style={{ width: `${trade.progressPct}%` }} />
-            </div>
-            <div className="grid grid-cols-3 gap-1 text-[11px] text-muted">
-              <span>{trade.progressPct}%</span>
-              <span className="text-center">${trade.notional.toLocaleString()}</span>
-              <span className="text-right">{trade.submittedAt}</span>
-            </div>
-          </article>
-        ))}
+              <div className="mb-2 h-2 rounded-full bg-surface">
+                <div className="h-2 rounded-full bg-emerald-400" style={{ width: `${trade.progressPct}%` }} />
+              </div>
+              <div className="grid grid-cols-3 gap-1 text-[11px] text-muted">
+                <span>{trade.progressPct}%</span>
+                <span className="text-center">${trade.notional.toLocaleString()}</span>
+                <span className="text-right">{trade.submittedAt}</span>
+              </div>
+            </article>
+          ))
+        )}
       </div>
 
       <h2 className="pt-2 text-sm font-semibold uppercase tracking-wide text-muted">Recent Activity</h2>

@@ -13,6 +13,7 @@ export type TokenPair = {
 export type SessionUser = {
   id: string;
   email: string;
+  full_name: string | null;
   role: UserRole;
   is_root_admin: boolean;
   current_trading_mode: TradingMode;
