@@ -115,6 +115,38 @@ export function mockDashboard(mode: TradingMode): DashboardSummary {
         timestamp: "09:44",
       },
     ],
+    capitalUtilization: {
+      totalCapital: isLive ? 42000 : 15000,
+      availableCash: isLive ? 18214.64 : 6240.31,
+      reservedCash: isLive ? 2100 : 540,
+      lockedCapital: isLive ? 21685.36 : 8220.13,
+      deployedCapital: isLive ? 23785.36 : 8760.13,
+      totalDeployedPct: isLive ? 56.63 : 58.4,
+      byStrategy: [
+        {
+          strategy: "momentum",
+          assignedCapital: isLive ? 18900 : 6300,
+          availableCash: isLive ? 7400 : 2400,
+          reservedCash: isLive ? 900 : 180,
+          lockedCapital: isLive ? 10600 : 3720,
+          deployedCapital: isLive ? 11500 : 3900,
+          utilizationPct: isLive ? 60.85 : 61.9,
+        },
+        {
+          strategy: "dca",
+          assignedCapital: isLive ? 11760 : 4200,
+          availableCash: isLive ? 5300 : 1980,
+          reservedCash: isLive ? 600 : 120,
+          lockedCapital: isLive ? 5860 : 2100,
+          deployedCapital: isLive ? 6460 : 2220,
+          utilizationPct: isLive ? 54.93 : 52.86,
+        },
+      ],
+      avgTradeSizeByStrategy: [
+        { strategy: "dca", avgTradeSize: isLive ? 135 : 110 },
+        { strategy: "momentum", avgTradeSize: isLive ? 280 : 215 },
+      ],
+    },
     feeAnalytics: {
       grossPnl: isLive ? 1452.56 : 701.22,
       netPnl: isLive ? 1248.11 : 612.09,

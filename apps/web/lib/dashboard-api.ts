@@ -168,6 +168,16 @@ export async function getDashboardSummary(mode: TradingMode): Promise<DashboardS
     positions: payload.positions ?? [],
     activeTrades: payload.activeTrades ?? [],
     recentActivity: payload.recentActivity ?? [],
+    capitalUtilization: payload.capitalUtilization ?? {
+      totalCapital: 0,
+      availableCash: 0,
+      reservedCash: 0,
+      lockedCapital: 0,
+      deployedCapital: 0,
+      totalDeployedPct: 0,
+      byStrategy: [],
+      avgTradeSizeByStrategy: [],
+    },
     feeAnalytics: payload.feeAnalytics ?? {
       grossPnl: 0,
       netPnl: 0,

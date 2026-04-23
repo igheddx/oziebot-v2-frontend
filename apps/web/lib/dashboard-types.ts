@@ -51,6 +51,24 @@ export type DashboardDetails = {
     price: number;
     timestamp: string;
   }>;
+  capitalUtilization: {
+    totalCapital: number;
+    availableCash: number;
+    reservedCash: number;
+    lockedCapital: number;
+    deployedCapital: number;
+    totalDeployedPct: number;
+    byStrategy: Array<{
+      strategy: string;
+      assignedCapital: number;
+      availableCash: number;
+      reservedCash: number;
+      lockedCapital: number;
+      deployedCapital: number;
+      utilizationPct: number;
+    }>;
+    avgTradeSizeByStrategy: Array<{ strategy: string; avgTradeSize: number }>;
+  };
   feeAnalytics: {
     grossPnl: number;
     netPnl: number;

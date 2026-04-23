@@ -251,6 +251,49 @@ export function DashboardScreen() {
             ))}
           </section>
 
+          {details?.capitalUtilization?.byStrategy ? (
+            <section className="oz-panel space-y-3 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">Capital utilization</h2>
+                  <p className="text-xs text-muted">
+                    {formatMoney(details.capitalUtilization.deployedCapital)} deployed of{" "}
+                    {formatMoney(details.capitalUtilization.totalCapital)} (
+                    {details.capitalUtilization.totalDeployedPct.toFixed(1)}%)
+                  </p>
+                </div>
+                <div className="text-right text-xs text-muted">
+                  <div>Reserved {formatMoney(details.capitalUtilization.reservedCash)}</div>
+                  <div>Locked {formatMoney(details.capitalUtilization.lockedCapital)}</div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {details.capitalUtilization.byStrategy.map((row) => {
+                  const avgTradeSize = details.capitalUtilization.avgTradeSizeByStrategy.find(
+                    (item) => item.strategy === row.strategy,
+                  )?.avgTradeSize;
+                  return (
+                    <div
+                      key={row.strategy}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-border/70 px-3 py-2 text-xs"
+                    >
+                      <div>
+                        <div className="font-medium text-foreground">{row.strategy}</div>
+                        <div className="text-muted">
+                          Assigned {formatMoney(row.assignedCapital)} · Deployed {formatMoney(row.deployedCapital)}
+                        </div>
+                      </div>
+                      <div className="text-right text-muted">
+                        <div>{row.utilizationPct.toFixed(1)}% utilized</div>
+                        <div>Avg trade {formatMoney(avgTradeSize ?? 0)}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
           <GrowthChart values={overview.growth} positive={overview.pnlValue >= 0} />
 
           {!rejections ? (
