@@ -18,7 +18,7 @@ export function MobileTabbar() {
   const pathname = usePathname();
   const { role } = useAuth();
   const [query, setQuery] = useState("");
-  const links = role === "root_admin" ? [...baseLinks, { href: "/admin/token-policy", label: "Admin" }] : baseLinks;
+  const links = role === "root_admin" ? [...baseLinks, { href: "/admin/runtime", label: "Runtime" }] : baseLinks;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
