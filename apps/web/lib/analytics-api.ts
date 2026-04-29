@@ -2,6 +2,8 @@ import { authFetch } from "@/lib/auth-service";
 import type { TradingMode } from "@/lib/dashboard-types";
 import type {
   AnalyticsRow,
+  OutcomeAnalyticsRow,
+  PaperLiveValidation,
   PaperLiveComparison,
   RejectionBreakdown,
   ReviewAnalyticsPayload,
@@ -91,4 +93,28 @@ export async function getTradeReviewPaperLiveComparison(
     options,
   );
   return payload?.paperLiveComparison ?? null;
+}
+
+export async function getTradeReviewOutcomeRows(
+  mode: TradingMode,
+  options: AnalyticsOptions = {},
+): Promise<OutcomeAnalyticsRow[] | null> {
+  const payload = await fetchAnalyticsJson<{ rows: OutcomeAnalyticsRow[] }>(
+    "/v1/me/analytics/outcomes",
+    mode,
+    options,
+  );
+  return payload?.rows ?? null;
+}
+
+export async function getTradeReviewPaperLiveValidation(
+  mode: TradingMode,
+  options: AnalyticsOptions = {},
+): Promise<PaperLiveValidation | null> {
+  const payload = await fetchAnalyticsJson<{ paperLiveValidation: PaperLiveValidation }>(
+    "/v1/me/analytics/validation",
+    mode,
+    options,
+  );
+  return payload?.paperLiveValidation ?? null;
 }

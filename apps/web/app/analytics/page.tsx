@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { useTradingMode } from "@/components/providers/trading-mode-provider";
 import {
+  getTradeReviewOutcomeRows,
+  getTradeReviewPaperLiveValidation,
   getTradeReviewAnalyticsSummary,
   getTradeReviewPairRows,
   getTradeReviewPaperLiveComparison,
@@ -13,6 +15,8 @@ import {
 } from "@/lib/analytics-api";
 import type {
   AnalyticsRow,
+  OutcomeAnalyticsRow,
+  PaperLiveValidation,
   PaperLiveComparison,
   RejectionBreakdown,
   ReviewAnalyticsSummaryPayload,
@@ -34,6 +38,11 @@ function formatStageLabel(value: string) {
   return value.replaceAll("_", " ");
 }
 
+function formatTimestamp(value: string | null) {
+  if (!value) return "—";
+  return new Date(value).toLocaleString();
+}
+
 function toneClass(value: number) {
   if (value > 0) return "text-positive";
   if (value < 0) return "text-negative";
@@ -53,6 +62,8 @@ export default function AnalyticsPage() {
   const [pairRows, setPairRows] = useState<AnalyticsRow[] | null>(null);
   const [rejectionBreakdown, setRejectionBreakdown] = useState<RejectionBreakdown | null>(null);
   const [paperLiveComparison, setPaperLiveComparison] = useState<PaperLiveComparison | null>(null);
+  const [outcomeRows, setOutcomeRows] = useState<OutcomeAnalyticsRow[] | null>(null);
+  const [paperLiveValidation, setPaperLiveValidation] = useState<PaperLiveValidation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [strategyFilter, setStrategyFilter] = useState("");
@@ -74,6 +85,8 @@ export default function AnalyticsPage() {
     setPairRows(null);
     setRejectionBreakdown(null);
     setPaperLiveComparison(null);
+    setOutcomeRows(null);
+    setPaperLiveValidation(null);
 
     void (async () => {
       const summary = await getTradeReviewAnalyticsSummary(mode, options);
@@ -84,21 +97,33 @@ export default function AnalyticsPage() {
       }
       setSummaryPayload(summary);
 
-      const [nextStrategies, nextPairs, nextRejections, nextComparison] = await Promise.all([
+      const [nextStrategies, nextPairs, nextRejections, nextComparison, nextOutcomes, nextValidation] =
+        await Promise.all([
         getTradeReviewStrategyRows(mode, options),
         getTradeReviewPairRows(mode, options),
         getTradeReviewRejectionBreakdown(mode, options),
         getTradeReviewPaperLiveComparison(mode, options),
+        getTradeReviewOutcomeRows(mode, options),
+        getTradeReviewPaperLiveValidation(mode, options),
       ]);
       if (!mounted) return;
 
-      if (!nextStrategies || !nextPairs || !nextRejections || !nextComparison) {
+      if (
+        !nextStrategies ||
+        !nextPairs ||
+        !nextRejections ||
+        !nextComparison ||
+        !nextOutcomes ||
+        !nextValidation
+      ) {
         setDetailError("Some analytics sections are still loading or temporarily unavailable.");
       }
       if (nextStrategies) setStrategyRows(nextStrategies);
       if (nextPairs) setPairRows(nextPairs);
       if (nextRejections) setRejectionBreakdown(nextRejections);
       if (nextComparison) setPaperLiveComparison(nextComparison);
+      if (nextOutcomes) setOutcomeRows(nextOutcomes);
+      if (nextValidation) setPaperLiveValidation(nextValidation);
     })();
 
     return () => {
@@ -116,29 +141,29 @@ export default function AnalyticsPage() {
         detail: `${summary.emitted} emitted`,
       },
       {
+        label: "Closed Trades",
+        value: summary.tradeCount.toString(),
+        detail: `${formatPercent(summary.winRatePct)} win rate`,
+      },
+      {
         label: "Rejected",
         value: summary.rejected.toString(),
-        detail: formatPercent(summary.rejectionRatePct),
+        detail: `${summary.suppressed} suppressed · ${summary.executionRejected} execution`,
       },
       {
-        label: "Executed",
-        value: summary.executed.toString(),
-        detail: `${formatPercent(summary.executionRatePct)} of emitted`,
-      },
-      {
-        label: "Profitable",
-        value: summary.profitable.toString(),
-        detail: formatPercent(summary.profitabilityRatePct),
+        label: "Profit retention",
+        value: formatPercent(summary.avgGivebackPct),
+        detail: `${summary.partialProfitCount} partials · DD ${formatMoney(summary.maxDrawdownEstimate)}`,
       },
       {
         label: "Realized P&L",
         value: formatMoney(summary.totalRealizedPnl),
-        detail: formatMoney(summary.totalFees),
+        detail: `${formatMoney(summary.avgWin)} / ${formatMoney(summary.avgLoss)}`,
       },
       {
         label: "Avg Hold",
         value: `${summary.avgHoldMinutes.toFixed(1)} min`,
-        detail: `${summary.avgSlippagePct.toFixed(3)}% slippage`,
+        detail: `${summary.avgSlippagePct.toFixed(3)}% slippage · ${formatMoney(summary.totalFees)} fees`,
       },
     ];
   }, [summaryPayload]);
@@ -150,9 +175,14 @@ export default function AnalyticsPage() {
         tradingMode: row.tradingMode,
         evaluated: row.evaluated,
         emitted: row.emitted,
+        suppressed: row.suppressed,
+        riskRejected: row.riskRejected,
+        executionRejected: row.executionRejected,
         reduced: row.reduced,
         rejected: row.rejected,
         executed: row.executed,
+        closedProfitable: row.closedProfitable,
+        closedUnprofitable: row.closedUnprofitable,
         profitable: row.profitable,
         rejectionRatePct: row.rejectionRatePct,
         executionRatePct: row.executionRatePct,
@@ -267,9 +297,12 @@ export default function AnalyticsPage() {
                       <div>Eval {row.evaluated}</div>
                       <div>Emit {row.emitted}</div>
                       <div>Exec {row.executed}</div>
-                      <div>Reject {row.rejected}</div>
+                      <div>Supp {row.suppressed}</div>
+                      <div>Risk {row.riskRejected}</div>
+                      <div>Exec rej {row.executionRejected}</div>
                       <div>Reduce {row.reduced}</div>
-                      <div>Profit {row.profitable}</div>
+                      <div>Win {row.closedProfitable}</div>
+                      <div>Loss {row.closedUnprofitable}</div>
                     </div>
                     <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
                       <div className="rounded-xl bg-surface px-2 py-2">
@@ -333,6 +366,18 @@ export default function AnalyticsPage() {
                         <p className="text-muted">Fees / slip</p>
                         <p className="mt-1 font-semibold text-foreground">
                           {formatMoney(row.totalFees)} / {row.avgSlippagePct.toFixed(3)}%
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-surface px-3 py-2">
+                        <p className="text-muted">Giveback / drawdown</p>
+                        <p className="mt-1 font-semibold text-foreground">
+                          {formatPercent(row.avgGivebackPct)} / {formatMoney(row.maxDrawdownEstimate)}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-surface px-3 py-2">
+                        <p className="text-muted">Exit mix</p>
+                        <p className="mt-1 font-semibold text-foreground">
+                          P {row.partialProfitCount} · TP {row.takeProfitCount} · TS {row.trailingStopCount}
                         </p>
                       </div>
                     </div>
@@ -422,18 +467,71 @@ export default function AnalyticsPage() {
                         <p className="mt-1 font-semibold text-foreground">{formatPercent(row.winRatePct)}</p>
                       </div>
                       <div className="rounded-xl bg-background/40 px-3 py-2">
-                        <p className="text-muted">Reject rate</p>
-                        <p className="mt-1 font-semibold text-foreground">{formatPercent(row.rejectionRatePct)}</p>
+                        <p className="text-muted">Giveback</p>
+                        <p className="mt-1 font-semibold text-foreground">{formatPercent(row.avgGivebackPct)}</p>
                       </div>
                       <div className="rounded-xl bg-background/40 px-3 py-2">
-                        <p className="text-muted">Fees</p>
-                        <p className="mt-1 font-semibold text-foreground">{formatMoney(row.totalFees)}</p>
+                        <p className="text-muted">Hold</p>
+                        <p className="mt-1 font-semibold text-foreground">{row.avgHoldMinutes.toFixed(1)} min</p>
                       </div>
                     </div>
                   </article>
                 ))
               )}
             </div>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Profit Retention</h2>
+            {!outcomeRows ? (
+              <article className="oz-panel p-3 text-sm text-muted">Loading trade outcome rows...</article>
+            ) : outcomeRows.length === 0 ? (
+              <article className="oz-panel p-3 text-sm text-muted">No closed trades in this window yet.</article>
+            ) : (
+              <div className="space-y-2">
+                {outcomeRows.map((row) => (
+                  <article key={row.outcomeId} className="oz-panel p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">
+                          {row.strategyName} · {row.symbol}
+                        </p>
+                        <p className="text-xs text-muted">{formatTimestamp(row.timestamp)}</p>
+                      </div>
+                      <span className={`text-sm font-semibold ${toneClass(row.realizedPnl)}`}>
+                        {formatMoney(row.realizedPnl)}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-xl bg-surface px-3 py-2">
+                        <p className="text-muted">Return / giveback</p>
+                        <p className="mt-1 font-semibold text-foreground">
+                          {formatPercent(row.realizedReturnPct)} / {formatPercent(row.profitGivebackPct)}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-surface px-3 py-2">
+                        <p className="text-muted">MFE / MAE</p>
+                        <p className="mt-1 font-semibold text-foreground">
+                          {formatPercent(row.maxFavorableExcursionPct)} / {formatPercent(row.maxAdverseExcursionPct)}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-surface px-3 py-2">
+                        <p className="text-muted">Exit / hold</p>
+                        <p className="mt-1 font-semibold text-foreground">
+                          {formatStageLabel(row.exitReason ?? "unknown")} · {row.holdMinutes.toFixed(1)} min
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-surface px-3 py-2">
+                        <p className="text-muted">Partial / remainder</p>
+                        <p className="mt-1 font-semibold text-foreground">
+                          {row.partialProfitTaken ? "yes" : "no"} · {formatStageLabel(row.remainingPositionOutcome ?? "n/a")}
+                        </p>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
 
           <section className="space-y-3">
@@ -500,6 +598,86 @@ export default function AnalyticsPage() {
                       </div>
                     </article>
                   ))}
+                </div>
+              </>
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Paper Live-Equivalent Validation</h2>
+            {!paperLiveValidation ? (
+              <article className="oz-panel p-3 text-sm text-muted">Loading live-equivalent review...</article>
+            ) : (
+              <>
+                <div className="grid gap-2 md:grid-cols-4">
+                  <article className="oz-panel p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-muted">Reviewed</p>
+                    <p className="mt-1 text-lg font-semibold text-foreground">
+                      {paperLiveValidation.overview.paperTradesReviewed}
+                    </p>
+                  </article>
+                  <article className="oz-panel p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-muted">Would pass</p>
+                    <p className="mt-1 text-lg font-semibold text-positive">
+                      {paperLiveValidation.overview.wouldPassLiveEquivalent}
+                    </p>
+                  </article>
+                  <article className="oz-panel p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-muted">Would reject</p>
+                    <p className="mt-1 text-lg font-semibold text-negative">
+                      {paperLiveValidation.overview.wouldRejectLiveEquivalent}
+                    </p>
+                  </article>
+                  <article className="oz-panel p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-muted">Reject rate</p>
+                    <p className="mt-1 text-lg font-semibold text-foreground">
+                      {formatPercent(paperLiveValidation.overview.rejectionRatePct)}
+                    </p>
+                  </article>
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <article className="oz-panel p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-muted">Top live-equivalent reasons</p>
+                    <div className="mt-2 space-y-2">
+                      {paperLiveValidation.reasonBreakdown.map((row) => (
+                        <div key={row.reasonCode} className="flex items-center justify-between text-sm">
+                          <span className="text-muted">{formatStageLabel(row.reasonCode)}</span>
+                          <span className="font-semibold text-foreground">{row.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                  <article className="oz-panel p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-muted">Flagged paper trades</p>
+                    <div className="mt-2 space-y-2">
+                      {paperLiveValidation.rows.map((row) => (
+                        <div key={row.outcomeId} className="rounded-xl bg-surface px-3 py-2 text-xs">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold text-foreground">
+                                {row.strategyName} · {row.symbol}
+                              </p>
+                              <p className="text-muted">{formatTimestamp(row.executedAt)}</p>
+                            </div>
+                            <span
+                              className={
+                                row.liveEquivalentRejected
+                                  ? "font-semibold text-negative"
+                                  : "font-semibold text-positive"
+                              }
+                            >
+                              {row.liveEquivalentRejected ? "would reject" : "would pass"}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-muted">
+                            {row.rejectedReasonCodes.length > 0
+                              ? row.rejectedReasonCodes.map(formatStageLabel).join(", ")
+                              : "No live-equivalent blockers"}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
                 </div>
               </>
             )}
