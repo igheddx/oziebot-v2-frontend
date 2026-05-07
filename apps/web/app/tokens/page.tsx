@@ -6,6 +6,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { useAuth } from "@/components/providers/auth-provider";
 import { useTradingMode } from "@/components/providers/trading-mode-provider";
 import { authFetch, parseErrorMessage } from "@/lib/auth-service";
+import { fetchUserTokenPolicyMatrix, type TokenPolicyMatrixEntry } from "@/lib/admin-token-policy";
 import { getTokens } from "@/lib/dashboard-api";
 import type { TokenItem } from "@/lib/dashboard-types";
 import { RowSkeleton } from "@/components/ui/skeleton";
@@ -33,6 +34,8 @@ export default function TokensPage() {
   const [quoteCurrency, setQuoteCurrency] = useState("USD");
   const [network, setNetwork] = useState("coinbase");
   const [displayName, setDisplayName] = useState("");
+  const [policyMatrix, setPolicyMatrix] = useState<TokenPolicyMatrixEntry[]>([]);
+  const [policyLoading, setPolicyLoading] = useState(true);
 
   const loadUserTokens = useCallback(() => {
     setIsLoading(true);
@@ -69,6 +72,19 @@ export default function TokensPage() {
   useEffect(() => {
     loadAdminTokens();
   }, [loadAdminTokens]);
+
+  const loadPolicyMatrix = useCallback(async () => {
+    setPolicyLoading(true);
+    const response = await fetchUserTokenPolicyMatrix();
+    setPolicyLoading(false);
+    if (response.data) {
+      setPolicyMatrix(response.data);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadPolicyMatrix();
+  }, [loadPolicyMatrix]);
 
   const onCreateToken = async () => {
     setAdminStatus(null);
@@ -228,6 +244,64 @@ export default function TokensPage() {
           </article>
         ))}
       </div>
+
+      <section className="oz-panel space-y-3 p-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Token Strategy Eligibility</p>
+          <p className="text-xs text-muted">This matrix is the extra gating layer on top of your token list and enabled strategies.</p>
+        </div>
+        {policyLoading ? (
+          <RowSkeleton />
+        ) : policyMatrix.length === 0 ? (
+          <p className="text-sm text-muted">No token-strategy policy rows available yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {policyMatrix.map((entry) => (
+              <article key={entry.token.id} className="rounded-xl border border-border p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold">{entry.token.symbol}</p>
+                    <p className="text-xs text-muted">
+                      Platform {entry.platform_token_enabled ? "enabled" : "disabled"} · You {entry.user_token_enabled ? "enabled" : "disabled"}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 grid gap-2">
+                  {entry.strategy_policies.map((policy) => {
+                    const userStrategy = entry.strategies?.find((row) => row.strategy_id === policy.strategy_id);
+                    return (
+                      <div key={`${entry.token.id}-${policy.strategy_id}`} className="rounded-lg bg-surface p-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-medium">{policy.strategy_display_name ?? policy.strategy_id}</p>
+                          <span
+                            className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
+                              policy.effective_recommendation_status === "blocked"
+                                ? "bg-negative/15 text-negative"
+                                : policy.effective_recommendation_status === "discouraged"
+                                  ? "bg-amber-400/20 text-amber-300"
+                                  : policy.effective_recommendation_status === "preferred"
+                                    ? "bg-positive/15 text-positive"
+                                    : "bg-card text-muted"
+                            }`}
+                          >
+                            {policy.effective_recommendation_status}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-muted">
+                          Strategy {userStrategy?.is_user_enabled ? "enabled" : "disabled"} · pair {policy.is_enabled ? "enabled" : "disabled"} · size multiplier {policy.size_multiplier.toFixed(2)}
+                        </p>
+                        <p className="mt-1 text-xs text-muted">
+                          {policy.recommendation_reason ?? "No policy note recorded."}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
     </AppShell>
   );
 }

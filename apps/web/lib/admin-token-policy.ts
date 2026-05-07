@@ -29,6 +29,7 @@ export type TokenStrategyPolicy = {
   id: string;
   strategy_id: string;
   strategy_display_name: string | null;
+  is_enabled: boolean;
   admin_enabled: boolean;
   suitability_score: number;
   computed_recommendation_status: string;
@@ -39,8 +40,12 @@ export type TokenStrategyPolicy = {
   recommendation_reason: string | null;
   recommendation_status_override: string | null;
   recommendation_reason_override: string | null;
+  size_multiplier: number;
+  configured_size_multiplier: number | null;
+  max_position_usd_override: number | null;
   max_position_pct_override: number | null;
   notes: string | null;
+  created_at: string | null;
   computed_at: string | null;
   updated_at: string | null;
 };
@@ -49,6 +54,13 @@ export type TokenPolicyMatrixEntry = {
   token: TokenPolicyToken;
   market_profile: TokenMarketProfile | null;
   strategy_policies: TokenStrategyPolicy[];
+  user_token_enabled?: boolean;
+  platform_token_enabled?: boolean;
+  strategies?: Array<{
+    strategy_id: string;
+    strategy_display_name: string | null;
+    is_user_enabled: boolean;
+  }>;
 };
 
 export type TokenPolicyDecision = {
@@ -65,6 +77,7 @@ export type TokenPolicyDecision = {
     original_size?: string | null;
     final_size?: string | null;
     size_multiplier?: string | null;
+    max_position_usd_override?: string | null;
     max_position_pct_override?: string | null;
     requested_quantity?: string | null;
   };
@@ -74,11 +87,20 @@ export type TokenPolicyDecision = {
 };
 
 export type TokenPolicyOverrideInput = {
+  is_enabled?: boolean;
   admin_enabled?: boolean;
   recommendation_status?: "preferred" | "allowed" | "discouraged" | "blocked" | null;
   recommendation_reason?: string | null;
+  size_multiplier?: number | null;
+  max_position_usd_override?: number | null;
   max_position_pct_override?: number | null;
   notes?: string | null;
+};
+
+export type TokenPolicyDefaultsResponse = {
+  tokens_processed: number;
+  policies_written: number;
+  updated_symbols: string[];
 };
 
 type DecisionFilters = {
@@ -107,6 +129,10 @@ export async function fetchTokenPolicyMatrix(symbol?: string) {
   return readJson<TokenPolicyMatrixEntry[]>(`/v1/admin/platform/token-policy/matrix${query}`);
 }
 
+export async function fetchUserTokenPolicyMatrix() {
+  return readJson<TokenPolicyMatrixEntry[]>("/v1/me/token-strategy-policy");
+}
+
 export async function fetchTokenPolicyDetail(tokenId: string) {
   return readJson<TokenPolicyMatrixEntry>(`/v1/admin/platform/token-policy/tokens/${tokenId}`);
 }
@@ -123,6 +149,24 @@ export async function updateTokenStrategyPolicy(
   if (!res) return { error: "Could not reach API." };
   if (!res.ok) return { error: await parseErrorMessage(res) };
   return { data: (await res.json()) as TokenStrategyPolicy };
+}
+
+export async function initializeRecommendedTokenPolicyDefaults() {
+  const res = await authFetch("/v1/admin/platform/token-policy/initialize-defaults", {
+    method: "POST",
+  });
+  if (!res) return { error: "Could not reach API." };
+  if (!res.ok) return { error: await parseErrorMessage(res) };
+  return { data: (await res.json()) as TokenPolicyDefaultsResponse };
+}
+
+export async function resetRecommendedTokenPolicyDefaults() {
+  const res = await authFetch("/v1/admin/platform/token-policy/reset-defaults", {
+    method: "POST",
+  });
+  if (!res) return { error: "Could not reach API." };
+  if (!res.ok) return { error: await parseErrorMessage(res) };
+  return { data: (await res.json()) as TokenPolicyDefaultsResponse };
 }
 
 export async function recalculateTokenPolicy(tokenId: string) {

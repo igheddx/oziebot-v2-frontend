@@ -8,7 +8,9 @@ import { RowSkeleton } from "@/components/ui/skeleton";
 import {
   fetchTokenPolicyDecisions,
   fetchTokenPolicyMatrix,
+  initializeRecommendedTokenPolicyDefaults,
   recalculateTokenPolicy,
+  resetRecommendedTokenPolicyDefaults,
   updateTokenStrategyPolicy,
   type TokenPolicyDecision,
   type TokenPolicyMatrixEntry,
@@ -16,10 +18,11 @@ import {
 } from "@/lib/admin-token-policy";
 
 type PolicyDraft = {
-  adminEnabled: boolean;
-  recommendationStatus: "" | "preferred" | "allowed" | "discouraged" | "blocked";
+  isEnabled: boolean;
+  recommendationStatus: "preferred" | "allowed" | "discouraged" | "blocked";
   recommendationReason: string;
-  maxPositionPctOverride: string;
+  sizeMultiplier: string;
+  maxPositionUsdOverride: string;
   notes: string;
 };
 
@@ -32,12 +35,12 @@ type DecisionFilterState = {
 
 function makeDraft(policy: TokenStrategyPolicy): PolicyDraft {
   return {
-    adminEnabled: policy.admin_enabled,
-    recommendationStatus:
-      (policy.recommendation_status_override as PolicyDraft["recommendationStatus"]) ?? "",
-    recommendationReason: policy.recommendation_reason_override ?? "",
-    maxPositionPctOverride:
-      policy.max_position_pct_override == null ? "" : String(policy.max_position_pct_override),
+    isEnabled: policy.is_enabled,
+    recommendationStatus: policy.recommendation_status as PolicyDraft["recommendationStatus"],
+    recommendationReason: policy.recommendation_reason ?? "",
+    sizeMultiplier: String(policy.configured_size_multiplier ?? policy.size_multiplier),
+    maxPositionUsdOverride:
+      policy.max_position_usd_override == null ? "" : String(policy.max_position_usd_override),
     notes: policy.notes ?? "",
   };
 }
@@ -82,6 +85,7 @@ export default function AdminTokenPolicyPage() {
   const [decisionStatus, setDecisionStatus] = useState<string | null>(null);
   const [savingPolicyId, setSavingPolicyId] = useState<string | null>(null);
   const [recalculatingTokenId, setRecalculatingTokenId] = useState<string | null>(null);
+  const [defaultAction, setDefaultAction] = useState<"initialize" | "reset" | null>(null);
   const [filters, setFilters] = useState<DecisionFilterState>({
     symbol: "",
     strategy_id: "",
@@ -176,24 +180,24 @@ export default function AdminTokenPolicyPage() {
 
   const onSavePolicy = async (tokenId: string, policy: TokenStrategyPolicy) => {
     const draft = drafts[policy.id] ?? makeDraft(policy);
-    const maxOverride = draft.maxPositionPctOverride.trim();
+    const sizeMultiplier = Number(draft.sizeMultiplier);
+    if (!Number.isFinite(sizeMultiplier) || sizeMultiplier < 0 || sizeMultiplier > 1) {
+      setStatus("Size multiplier must be between 0 and 1.");
+      return;
+    }
+    const maxOverride = draft.maxPositionUsdOverride.trim();
     const parsedOverride = maxOverride ? Number(maxOverride) : null;
-    if (
-      maxOverride &&
-      (parsedOverride === null ||
-        !Number.isFinite(parsedOverride) ||
-        parsedOverride < 0 ||
-        parsedOverride > 1)
-    ) {
-      setStatus("Max position override must be between 0 and 1.");
+    if (maxOverride && (parsedOverride === null || !Number.isFinite(parsedOverride) || parsedOverride < 0)) {
+      setStatus("Max position USD override must be zero or greater.");
       return;
     }
     setSavingPolicyId(policy.id);
     const response = await updateTokenStrategyPolicy(tokenId, policy.strategy_id, {
-      admin_enabled: draft.adminEnabled,
-      recommendation_status: draft.recommendationStatus || null,
+      is_enabled: draft.isEnabled,
+      recommendation_status: draft.recommendationStatus,
       recommendation_reason: draft.recommendationReason.trim() || null,
-      max_position_pct_override: parsedOverride,
+      size_multiplier: sizeMultiplier,
+      max_position_usd_override: parsedOverride,
       notes: draft.notes.trim() || null,
     });
     setSavingPolicyId(null);
@@ -202,6 +206,26 @@ export default function AdminTokenPolicyPage() {
       return;
     }
     setStatus(`${policy.strategy_display_name ?? policy.strategy_id} policy saved.`);
+    await Promise.all([loadMatrix(), loadDecisions(filters)]);
+  };
+
+  const onDefaultsAction = async (action: "initialize" | "reset") => {
+    setDefaultAction(action);
+    const response =
+      action === "initialize"
+        ? await initializeRecommendedTokenPolicyDefaults()
+        : await resetRecommendedTokenPolicyDefaults();
+    setDefaultAction(null);
+    if (response.error) {
+      setStatus(response.error);
+      return;
+    }
+    const payload = response.data;
+    setStatus(
+      payload
+        ? `${action === "initialize" ? "Initialized" : "Reset"} ${payload.policies_written} policy rows across ${payload.tokens_processed} tokens.`
+        : "Token policy defaults updated.",
+    );
     await Promise.all([loadMatrix(), loadDecisions(filters)]);
   };
 
@@ -237,15 +261,33 @@ export default function AdminTokenPolicyPage() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-muted">Policy Matrix</p>
-            <p className="text-xs text-muted">Real backend profiles, suitability scores, and admin overrides.</p>
+            <p className="text-xs text-muted">Explicit token-to-strategy eligibility with live engine enforcement.</p>
           </div>
-          <button
-            type="button"
-            className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-muted"
-            onClick={() => void loadMatrix()}
-          >
-            Refresh
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-muted"
+              disabled={defaultAction !== null}
+              onClick={() => void onDefaultsAction("initialize")}
+            >
+              {defaultAction === "initialize" ? "Initializing..." : "Initialize defaults"}
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-muted"
+              disabled={defaultAction !== null}
+              onClick={() => void onDefaultsAction("reset")}
+            >
+              {defaultAction === "reset" ? "Resetting..." : "Reset to recommended"}
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-muted"
+              onClick={() => void loadMatrix()}
+            >
+              Refresh
+            </button>
+          </div>
         </div>
         <input
           className="h-10 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-sky-400"
@@ -313,30 +355,27 @@ export default function AdminTokenPolicyPage() {
                         <div key={policy.id} className="rounded-xl border border-border p-3">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm font-semibold">{policy.strategy_display_name ?? policy.strategy_id}</p>
-                            <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${statusTone(policy.computed_recommendation_status)}`}>
-                              computed: {policy.computed_recommendation_status}
-                            </span>
                             <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${statusTone(policy.effective_recommendation_status)}`}>
-                              effective: {policy.effective_recommendation_status}
+                              {policy.effective_recommendation_status}
                             </span>
                           </div>
                           <p className="mt-2 text-xs text-muted">
-                            Suitability {policy.suitability_score.toFixed(2)} · {policy.computed_recommendation_reason ?? "No computed reason"}
+                            Enabled {policy.is_enabled ? "yes" : "no"} · multiplier {policy.size_multiplier.toFixed(2)} · suitability {policy.suitability_score.toFixed(2)}
                           </p>
                           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                             <label className="rounded-lg border border-border px-3 py-2 text-xs text-muted">
-                              <span className="mb-1 block">Admin enabled</span>
+                              <span className="mb-1 block">Eligibility</span>
                               <select
                                 className="w-full bg-transparent text-sm text-foreground outline-none"
-                                value={draft.adminEnabled ? "true" : "false"}
-                                onChange={(event) => updateDraft(policy.id, { adminEnabled: event.target.value === "true" })}
+                                value={draft.isEnabled ? "true" : "false"}
+                                onChange={(event) => updateDraft(policy.id, { isEnabled: event.target.value === "true" })}
                               >
                                 <option value="true">Enabled</option>
                                 <option value="false">Disabled</option>
                               </select>
                             </label>
                             <label className="rounded-lg border border-border px-3 py-2 text-xs text-muted">
-                              <span className="mb-1 block">Override status</span>
+                              <span className="mb-1 block">Recommendation status</span>
                               <select
                                 className="w-full bg-transparent text-sm text-foreground outline-none"
                                 value={draft.recommendationStatus}
@@ -346,29 +385,37 @@ export default function AdminTokenPolicyPage() {
                                   })
                                 }
                               >
-                                <option value="">Computed default</option>
-                                <option value="preferred">Preferred</option>
-                                <option value="allowed">Allowed</option>
-                                <option value="discouraged">Discouraged</option>
+                                  <option value="preferred">Preferred</option>
+                                  <option value="allowed">Allowed</option>
+                                  <option value="discouraged">Discouraged</option>
                                 <option value="blocked">Blocked</option>
                               </select>
                             </label>
                             <label className="rounded-lg border border-border px-3 py-2 text-xs text-muted">
-                              <span className="mb-1 block">Override reason</span>
+                              <span className="mb-1 block">Policy reason</span>
                               <input
                                 className="w-full bg-transparent text-sm text-foreground outline-none"
                                 value={draft.recommendationReason}
                                 onChange={(event) => updateDraft(policy.id, { recommendationReason: event.target.value })}
-                                placeholder="Optional admin reason"
+                                placeholder="Optional reason"
                               />
                             </label>
                             <label className="rounded-lg border border-border px-3 py-2 text-xs text-muted">
-                              <span className="mb-1 block">Max position pct override</span>
+                              <span className="mb-1 block">Size multiplier</span>
                               <input
                                 className="w-full bg-transparent text-sm text-foreground outline-none"
-                                value={draft.maxPositionPctOverride}
-                                onChange={(event) => updateDraft(policy.id, { maxPositionPctOverride: event.target.value })}
-                                placeholder="0.25"
+                                value={draft.sizeMultiplier}
+                                onChange={(event) => updateDraft(policy.id, { sizeMultiplier: event.target.value })}
+                                placeholder="1.0"
+                              />
+                            </label>
+                            <label className="rounded-lg border border-border px-3 py-2 text-xs text-muted">
+                              <span className="mb-1 block">Max position USD override</span>
+                              <input
+                                className="w-full bg-transparent text-sm text-foreground outline-none"
+                                value={draft.maxPositionUsdOverride}
+                                onChange={(event) => updateDraft(policy.id, { maxPositionUsdOverride: event.target.value })}
+                                placeholder="300"
                               />
                             </label>
                           </div>
@@ -383,7 +430,7 @@ export default function AdminTokenPolicyPage() {
                           </label>
                           <div className="mt-3 flex items-center justify-between gap-3">
                             <p className="text-xs text-muted">
-                              Override value: {policy.recommendation_status_override ?? "none"} · Updated {policy.updated_at ? new Date(policy.updated_at).toLocaleString() : "—"}
+                              Created {policy.created_at ? new Date(policy.created_at).toLocaleString() : "—"} · Updated {policy.updated_at ? new Date(policy.updated_at).toLocaleString() : "—"}
                             </p>
                             <button
                               type="button"
@@ -489,8 +536,8 @@ export default function AdminTokenPolicyPage() {
                 </p>
                 <p className="mt-1 text-xs text-muted">
                   Size {decision.final_sizing_impact.original_size ?? "—"} → {decision.final_sizing_impact.final_size ?? "—"} · multiplier{" "}
-                  {decision.final_sizing_impact.size_multiplier ?? "—"} · max override{" "}
-                  {decision.final_sizing_impact.max_position_pct_override ?? "—"}
+                  {decision.final_sizing_impact.size_multiplier ?? "—"} · max USD override{" "}
+                  {decision.final_sizing_impact.max_position_usd_override ?? "—"}
                 </p>
                 <p className="mt-2 text-xs text-muted">{decision.decision_reason ?? "No decision reason recorded."}</p>
                 <p className="mt-2 text-[11px] text-muted">{new Date(decision.timestamp).toLocaleString()}</p>
