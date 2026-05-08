@@ -4,6 +4,8 @@ export type DashboardOverview = {
   availableBalance: number;
   portfolioValue: number;
   pnlValue: number;
+  realizedPnlValue: number;
+  unrealizedPnlValue: number;
   pnlPercent: number;
   gainLossLabel: string;
   growth: number[];

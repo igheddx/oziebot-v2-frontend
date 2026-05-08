@@ -52,6 +52,7 @@ export function DashboardScreen() {
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [rejectionsError, setRejectionsError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [dashboardReady, setDashboardReady] = useState(false);
   const [rejectionWindowHours, setRejectionWindowHours] = useState<DashboardRejections["windowHours"]>(24);
   const [positionSearch, setPositionSearch] = useState("");
   const [visiblePositionsCount, setVisiblePositionsCount] = useState(PAGE_SIZE);
@@ -76,31 +77,36 @@ export function DashboardScreen() {
   );
 
   const loadDashboard = useCallback(
-    async (forceRefresh = false) => {
+    async (forceRefresh = false): Promise<boolean> => {
       setError(null);
       setDetailsError(null);
       setIsRefreshing(true);
       try {
-        const nextOverview = await getDashboardOverview(mode, { forceRefresh });
+        const [nextOverview, nextDetails] = await Promise.all([
+          getDashboardOverview(mode, { forceRefresh }),
+          getDashboardDetails(mode, { forceRefresh }),
+        ]);
+
         if (!nextOverview) {
           setOverview(null);
           setDetails(null);
           setError("Dashboard data is temporarily unavailable. Your trades and balances were not deleted.");
-          return;
+          return false;
         }
         setOverview(nextOverview);
 
-        const nextDetails = await getDashboardDetails(mode, { forceRefresh });
         if (!nextDetails) {
           setDetails(null);
           setDetailsError("Detailed dashboard panels are temporarily unavailable.");
         } else {
           setDetails(nextDetails);
         }
+        return true;
       } catch {
         setOverview(null);
         setDetails(null);
         setError("Dashboard data is temporarily unavailable. Your trades and balances were not deleted.");
+        return false;
       } finally {
         setIsRefreshing(false);
       }
@@ -110,8 +116,12 @@ export function DashboardScreen() {
 
   useEffect(() => {
     let mounted = true;
-    void loadDashboard().then(() => {
+    setDashboardReady(false);
+    setRejections(null);
+    setRejectionsError(null);
+    void loadDashboard(false).then((ok) => {
       if (!mounted) return;
+      setDashboardReady(ok);
     });
     return () => {
       mounted = false;
@@ -119,18 +129,15 @@ export function DashboardScreen() {
   }, [loadDashboard]);
 
   useEffect(() => {
-    let mounted = true;
-    void loadRejections().then(() => {
-      if (!mounted) return;
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [loadRejections]);
+    if (!dashboardReady) return;
+    void loadRejections(false);
+  }, [dashboardReady, loadRejections]);
 
   const cards = useMemo(() => {
     if (!overview) return [];
     const normalizedPnlValue = normalizeDisplayValue(overview.pnlValue);
+    const normalizedRealizedPnlValue = normalizeDisplayValue(overview.realizedPnlValue);
+    const normalizedUnrealizedPnlValue = normalizeDisplayValue(overview.unrealizedPnlValue);
     const detailPositionsCount = details ? details.positions.length : null;
     const detailFeesMonth = details?.feeAnalytics.totalFeesMonth ?? null;
     const detailAvgNetEdge = details?.feeAnalytics.avgNetEdgeAtEntryBps ?? null;
@@ -142,6 +149,26 @@ export function DashboardScreen() {
         value: formatMoney(normalizedPnlValue),
         tone: normalizedPnlValue === 0 ? "neutral" : normalizedPnlValue > 0 ? "positive" : "negative",
         detail: `${overview.pnlPercent >= 0 ? "+" : ""}${overview.pnlPercent.toFixed(2)}%`,
+      },
+      {
+        label: "Realized P&L",
+        value: formatMoney(normalizedRealizedPnlValue),
+        tone:
+          normalizedRealizedPnlValue === 0
+            ? "neutral"
+            : normalizedRealizedPnlValue > 0
+              ? "positive"
+              : "negative",
+      },
+      {
+        label: "Unrealized P&L",
+        value: formatMoney(normalizedUnrealizedPnlValue),
+        tone:
+          normalizedUnrealizedPnlValue === 0
+            ? "neutral"
+            : normalizedUnrealizedPnlValue > 0
+              ? "positive"
+              : "negative",
       },
       {
         label: "Active Positions",
@@ -197,7 +224,9 @@ export function DashboardScreen() {
           className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-muted disabled:opacity-60"
           onClick={() =>
             void (async () => {
-              await Promise.all([loadDashboard(true), loadRejections(true)]);
+              const ok = await loadDashboard(true);
+              if (!ok) return;
+              await loadRejections(true);
             })()
           }
           disabled={isRefreshing}
