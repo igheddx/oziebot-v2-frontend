@@ -103,6 +103,17 @@ export type TokenPolicyDefaultsResponse = {
   updated_symbols: string[];
 };
 
+export type TokenPolicyExport = {
+  generated_at: string;
+  default_missing_policy_behavior: "allowed" | "blocked";
+  tokens: Array<{
+    token: TokenPolicyToken;
+    market_profile: TokenMarketProfile | null;
+    strategies: Record<string, TokenStrategyPolicy>;
+  }>;
+  matrix: Record<string, Record<string, TokenStrategyPolicy>>;
+};
+
 type DecisionFilters = {
   symbol?: string;
   strategy_id?: string;
@@ -127,6 +138,10 @@ export async function fetchTokenMarketProfiles() {
 export async function fetchTokenPolicyMatrix(symbol?: string) {
   const query = symbol?.trim() ? `?symbol=${encodeURIComponent(symbol.trim())}` : "";
   return readJson<TokenPolicyMatrixEntry[]>(`/v1/admin/platform/token-policy/matrix${query}`);
+}
+
+export async function fetchTokenPolicyExport() {
+  return readJson<TokenPolicyExport>("/v1/admin/platform/token-policy/export");
 }
 
 export async function fetchUserTokenPolicyMatrix() {

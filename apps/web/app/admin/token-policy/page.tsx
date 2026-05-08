@@ -7,11 +7,13 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import {
   fetchTokenPolicyDecisions,
+  fetchTokenPolicyExport,
   fetchTokenPolicyMatrix,
   initializeRecommendedTokenPolicyDefaults,
   recalculateTokenPolicy,
   resetRecommendedTokenPolicyDefaults,
   updateTokenStrategyPolicy,
+  type TokenPolicyExport,
   type TokenPolicyDecision,
   type TokenPolicyMatrixEntry,
   type TokenStrategyPolicy,
@@ -86,6 +88,9 @@ export default function AdminTokenPolicyPage() {
   const [savingPolicyId, setSavingPolicyId] = useState<string | null>(null);
   const [recalculatingTokenId, setRecalculatingTokenId] = useState<string | null>(null);
   const [defaultAction, setDefaultAction] = useState<"initialize" | "reset" | null>(null);
+  const [exportAction, setExportAction] = useState<"view" | "copy" | "download" | null>(null);
+  const [exportJson, setExportJson] = useState<string | null>(null);
+  const [showExportJson, setShowExportJson] = useState(false);
   const [filters, setFilters] = useState<DecisionFilterState>({
     symbol: "",
     strategy_id: "",
@@ -209,6 +214,53 @@ export default function AdminTokenPolicyPage() {
     await Promise.all([loadMatrix(), loadDecisions(filters)]);
   };
 
+  const loadExportPayload = useCallback(async () => {
+    const response = await fetchTokenPolicyExport();
+    if (response.error) {
+      setStatus(response.error);
+      return null;
+    }
+    return response.data ?? null;
+  }, []);
+
+  const formatExportJson = (payload: TokenPolicyExport) => `${JSON.stringify(payload, null, 2)}\n`;
+
+  const onExportAction = async (action: "view" | "copy" | "download") => {
+    setExportAction(action);
+    const payload = await loadExportPayload();
+    setExportAction(null);
+    if (!payload) return;
+
+    const nextJson = formatExportJson(payload);
+    setExportJson(nextJson);
+
+    if (action === "view") {
+      setShowExportJson((current) => (current ? current : true));
+      setStatus("Token strategy policy JSON loaded.");
+      return;
+    }
+
+    if (action === "copy") {
+      try {
+        await navigator.clipboard.writeText(nextJson);
+        setStatus("Token strategy policy JSON copied.");
+      } catch {
+        setStatus("Could not copy token strategy policy JSON.");
+      }
+      return;
+    }
+
+    const filename = `token-strategy-policy-${payload.generated_at.replaceAll(":", "-")}.json`;
+    const blob = new Blob([nextJson], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+    setStatus("Token strategy policy JSON downloaded.");
+  };
+
   const onDefaultsAction = async (action: "initialize" | "reset") => {
     setDefaultAction(action);
     const response =
@@ -279,6 +331,30 @@ export default function AdminTokenPolicyPage() {
               onClick={() => void onDefaultsAction("reset")}
             >
               {defaultAction === "reset" ? "Resetting..." : "Reset to recommended"}
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-muted"
+              disabled={exportAction !== null}
+              onClick={() => void onExportAction("view")}
+            >
+              {exportAction === "view" ? "Loading JSON..." : showExportJson ? "Refresh JSON" : "View JSON"}
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-muted"
+              disabled={exportAction !== null}
+              onClick={() => void onExportAction("copy")}
+            >
+              {exportAction === "copy" ? "Copying..." : "Copy JSON"}
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-muted"
+              disabled={exportAction !== null}
+              onClick={() => void onExportAction("download")}
+            >
+              {exportAction === "download" ? "Preparing..." : "Download JSON"}
             </button>
             <button
               type="button"
@@ -450,6 +526,23 @@ export default function AdminTokenPolicyPage() {
             );
           })
         )}
+        {showExportJson ? (
+          <div className="rounded-xl border border-border bg-surface p-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Export JSON</p>
+              <button
+                type="button"
+                className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-muted"
+                onClick={() => setShowExportJson(false)}
+              >
+                Hide JSON
+              </button>
+            </div>
+            <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs text-foreground">
+              {exportJson ?? "Load the export to preview the current token strategy policy JSON."}
+            </pre>
+          </div>
+        ) : null}
       </section>
 
       <section className="oz-panel space-y-3 p-3">
