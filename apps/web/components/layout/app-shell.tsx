@@ -30,6 +30,7 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
           ...(isRootAdmin
             ? [
                 { href: "/admin/runtime", label: "Runtime" },
+                { href: "/admin/trading-diagnostics", label: "Trading Diagnostics" },
                 { href: "/admin/token-policy", label: "Admin" },
                 { href: "/admin/fee-settings", label: "Fee Settings" },
               ]
