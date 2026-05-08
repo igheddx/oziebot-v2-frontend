@@ -72,6 +72,91 @@ export type TradingDiagnosticsTokenSummary = {
   worst_strategy: string | null;
 };
 
+export type TradingDiagnosticsExecutionDetail = {
+  execution_trade_id: string;
+  order_id: string;
+  strategy: string;
+  token: string;
+  trading_mode: string;
+  side: string;
+  executed_at: string | null;
+  quantity: number | null;
+  price_usd: number | null;
+  notional_usd: number | null;
+  fees_usd: number | null;
+  realized_pnl_usd: number | null;
+  position_quantity_after: number | null;
+  position_closed: boolean;
+};
+
+export type TradingDiagnosticsExecutionStrategySummary = {
+  strategy: string;
+  trading_mode: string;
+  total_executions: number;
+  buy_executions: number;
+  sell_executions: number;
+  flattened_executions: number;
+  total_notional_usd: number | null;
+  total_fees_usd: number | null;
+  total_realized_pnl_usd: number | null;
+  last_executed_at: string | null;
+};
+
+export type TradingDiagnosticsExecutionTokenSummary = {
+  token: string;
+  trading_mode: string;
+  total_executions: number;
+  buy_executions: number;
+  sell_executions: number;
+  flattened_executions: number;
+  total_notional_usd: number | null;
+  total_fees_usd: number | null;
+  total_realized_pnl_usd: number | null;
+  last_executed_at: string | null;
+};
+
+export type TradingDiagnosticsExecutionActivity = {
+  execution_count: number;
+  flattened_trade_count: number;
+  buy_count: number;
+  sell_count: number;
+  unique_tokens: number;
+  total_notional_usd: number | null;
+  total_fees_usd: number | null;
+  total_realized_pnl_usd: number | null;
+  data_source: string;
+  note: string | null;
+  strategy_summary: TradingDiagnosticsExecutionStrategySummary[];
+  token_summary: TradingDiagnosticsExecutionTokenSummary[];
+  execution_details: TradingDiagnosticsExecutionDetail[];
+};
+
+export type TradingDiagnosticsOpenPosition = {
+  position_id: string;
+  strategy: string;
+  token: string;
+  trading_mode: string;
+  quantity: number | null;
+  avg_entry_price: number | null;
+  position_notional_usd: number | null;
+  realized_pnl_usd: number | null;
+  opened_at: string | null;
+  last_trade_at: string | null;
+  updated_at: string | null;
+  closed_at: string | null;
+};
+
+export type TradingDiagnosticsOpenPositions = {
+  position_count: number;
+  unique_tokens: number;
+  total_position_notional_usd: number | null;
+  total_realized_pnl_usd: number | null;
+  exposure_by_strategy: Record<string, number | null>;
+  data_source: string;
+  note: string | null;
+  positions: TradingDiagnosticsOpenPosition[];
+};
+
 export type TradingDiagnosticsSignalFunnel = {
   signals_evaluated: number | null;
   signals_emitted: number | null;
@@ -117,6 +202,8 @@ export type TradingDiagnosticsReport = {
   trade_details: TradingDiagnosticsTradeDetail[];
   strategy_summary: TradingDiagnosticsStrategySummary[];
   token_summary: TradingDiagnosticsTokenSummary[];
+  execution_activity: TradingDiagnosticsExecutionActivity;
+  open_positions: TradingDiagnosticsOpenPositions;
   signal_funnel: TradingDiagnosticsSignalFunnel;
   capital_utilization: TradingDiagnosticsCapitalUtilization;
   exit_analysis: TradingDiagnosticsExitAnalysis;
