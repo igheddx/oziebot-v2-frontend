@@ -30,6 +30,7 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
           ...(isRootAdmin
             ? [
                 { href: "/admin/runtime", label: "Runtime" },
+                { href: "/admin/ai-diagnostics", label: "AI Diagnostic Review" },
                 { href: "/admin/trading-diagnostics", label: "Trading Diagnostics" },
                 { href: "/admin/token-policy", label: "Admin" },
                 { href: "/admin/fee-settings", label: "Fee Settings" },
@@ -37,6 +38,7 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
             : []),
         { href: "/analytics", label: "Analytics" },
         { href: "/trade-log", label: "Trade Log" },
+        { href: "/trading-performance-export", label: "Export trades (CSV)" },
         { href: "/onboarding", label: "Setup" },
       ].map((item) => ({
         ...item,
