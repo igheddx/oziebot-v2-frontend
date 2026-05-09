@@ -6,6 +6,11 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
 import { MobileTabbar } from "@/components/nav/mobile-tabbar";
+import {
+  ADMIN_NAV_LINKS,
+  PRIMARY_NAV_LINKS,
+  SECONDARY_NAV_LINKS,
+} from "@/components/nav/app-nav-links";
 import { ModeBadge, ModeToggle } from "@/components/dashboard/mode-toggle";
 import { useAuth } from "@/components/providers/auth-provider";
 import logo from "@/images/oziebot-logo.png";
@@ -24,23 +29,25 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
   const isRootAdmin = role === "root_admin";
   const [drawerOpen, setDrawerOpen] = useState(false);
   const queryString = searchParams.toString();
-  const navLinks = useMemo(
+  const primaryLinks = useMemo(
     () =>
-      [
-          ...(isRootAdmin
-            ? [
-                { href: "/admin/runtime", label: "Runtime" },
-                { href: "/admin/ai-diagnostics", label: "AI Diagnostic Review" },
-                { href: "/admin/trading-diagnostics", label: "Trading Diagnostics" },
-                { href: "/admin/token-policy", label: "Admin" },
-                { href: "/admin/fee-settings", label: "Fee Settings" },
-              ]
-            : []),
-        { href: "/analytics", label: "Analytics" },
-        { href: "/trade-log", label: "Trade Log" },
-        { href: "/trading-performance-export", label: "Export trades (CSV)" },
-        { href: "/onboarding", label: "Setup" },
-      ].map((item) => ({
+      PRIMARY_NAV_LINKS.map((item) => ({
+        ...item,
+        href: queryString ? `${item.href}?${queryString}` : item.href,
+      })),
+    [queryString],
+  );
+  const secondaryLinks = useMemo(
+    () =>
+      SECONDARY_NAV_LINKS.map((item) => ({
+        ...item,
+        href: queryString ? `${item.href}?${queryString}` : item.href,
+      })),
+    [queryString],
+  );
+  const adminLinks = useMemo(
+    () =>
+      (isRootAdmin ? ADMIN_NAV_LINKS : []).map((item) => ({
         ...item,
         href: queryString ? `${item.href}?${queryString}` : item.href,
       })),
@@ -99,6 +106,24 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
             {subtitle ? (
               <p className="mt-1 max-w-3xl text-sm text-muted sm:text-[15px]">{subtitle}</p>
             ) : null}
+            <nav className="mt-4 hidden md:flex md:flex-wrap md:gap-2">
+              {primaryLinks.map((item) => {
+                const active = pathname === item.href.split("?")[0];
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`inline-flex h-10 items-center rounded-xl border px-4 text-sm font-semibold transition ${
+                      active
+                        ? "border-border bg-card text-foreground"
+                        : "border-border/80 text-muted hover:bg-card/70 hover:text-foreground"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
           </div>
         </div>
       </header>
@@ -132,18 +157,61 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
               </button>
             </div>
             {showModeToggle ? <ModeToggle variant="drawer" /> : null}
-            <nav className="space-y-2">
-              {navLinks.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="flex h-12 items-center rounded-2xl border border-border px-4 text-sm font-semibold text-foreground"
-                  onClick={() => setDrawerOpen(false)}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+                  Navigation
+                </p>
+                <nav className="space-y-2">
+                  {primaryLinks.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className="flex h-12 items-center rounded-2xl border border-border px-4 text-sm font-semibold text-foreground"
+                      onClick={() => setDrawerOpen(false)}
+                    >
+                      {item.label}
+                    </Link>
+                  ))}
+                </nav>
+              </div>
+              <div className="space-y-2">
+                <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+                  Tools
+                </p>
+                <nav className="space-y-2">
+                  {secondaryLinks.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className="flex h-12 items-center rounded-2xl border border-border px-4 text-sm font-semibold text-foreground"
+                      onClick={() => setDrawerOpen(false)}
+                    >
+                      {item.label}
+                    </Link>
+                  ))}
+                </nav>
+              </div>
+              {adminLinks.length ? (
+                <div className="space-y-2">
+                  <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+                    Admin
+                  </p>
+                  <nav className="space-y-2">
+                    {adminLinks.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className="flex h-12 items-center rounded-2xl border border-border px-4 text-sm font-semibold text-foreground"
+                        onClick={() => setDrawerOpen(false)}
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </nav>
+                </div>
+              ) : null}
+            </div>
             <button
               type="button"
               onClick={() => {
