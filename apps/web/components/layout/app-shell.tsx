@@ -138,9 +138,9 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
           />
           <aside
             id="app-shell-menu"
-            className="absolute inset-y-0 right-0 flex w-full max-w-xs flex-col gap-4 border-l border-border bg-background p-4 shadow-2xl"
+            className="absolute inset-y-0 right-0 flex h-full w-full max-w-xs flex-col overflow-hidden border-l border-border bg-background p-4 shadow-2xl"
           >
-            <div className="flex items-center justify-between">
+            <div className="flex shrink-0 items-center justify-between">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">Menu</p>
                 <p className="text-sm font-medium text-foreground">{user?.full_name ?? user?.email ?? "Oziebot"}</p>
@@ -156,8 +156,12 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
                 ×
               </button>
             </div>
-            {showModeToggle ? <ModeToggle variant="drawer" /> : null}
-            <div className="space-y-4">
+            {showModeToggle ? (
+              <div className="shrink-0 pt-4">
+                <ModeToggle variant="drawer" />
+              </div>
+            ) : null}
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pb-4 pt-4 pr-1">
               <div className="space-y-2">
                 <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
                   Navigation
@@ -212,16 +216,18 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
                 </div>
               ) : null}
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setDrawerOpen(false);
-                void logoutUser();
-              }}
-              className="mt-auto flex h-12 items-center justify-center rounded-2xl border border-border px-4 text-sm font-semibold text-muted"
-            >
-              Logout
-            </button>
+            <div className="shrink-0 border-t border-border/80 pt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setDrawerOpen(false);
+                  void logoutUser();
+                }}
+                className="flex h-12 w-full items-center justify-center rounded-2xl border border-border px-4 text-sm font-semibold text-muted"
+              >
+                Logout
+              </button>
+            </div>
           </aside>
         </div>
       ) : null}
