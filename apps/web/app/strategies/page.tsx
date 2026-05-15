@@ -1,10 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { useAuth } from "@/components/providers/auth-provider";
+import { useTradingMode } from "@/components/providers/trading-mode-provider";
+import { fetchUserTokenPolicyMatrix, type TokenPolicyMatrixEntry } from "@/lib/admin-token-policy";
 import { authFetch, parseErrorMessage } from "@/lib/auth-service";
+import { getTokens } from "@/lib/dashboard-api";
+import type { TokenItem } from "@/lib/dashboard-types";
 import { RowSkeleton } from "@/components/ui/skeleton";
 
 type CatalogStrategy = {
@@ -34,12 +38,38 @@ type RiskCapsDraft = {
   maxOpenPositions: string;
 };
 
+type ConfiguredStrategy = {
+  strategy_id: string;
+  is_enabled: boolean;
+  config: Record<string, unknown>;
+};
+
+type StrategyTokenOption = {
+  symbol: string;
+  label: string;
+  disabled: boolean;
+};
+
+function getConfigSymbols(config: Record<string, unknown> | null | undefined): string[] {
+  const requested = config?.symbols;
+  if (!Array.isArray(requested)) return [];
+  return requested
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+}
+
 export default function StrategiesPage() {
   const { role } = useAuth();
+  const { mode } = useTradingMode();
   const [catalogStrategies, setCatalogStrategies] = useState<CatalogStrategy[]>([]);
+  const [configuredStrategies, setConfiguredStrategies] = useState<Record<string, ConfiguredStrategy>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [tokensLoading, setTokensLoading] = useState(true);
   const [actionKey, setActionKey] = useState<string | null>(null);
   const [userStatus, setUserStatus] = useState<string | null>(null);
+  const [availableTokens, setAvailableTokens] = useState<TokenItem[]>([]);
+  const [policyMatrix, setPolicyMatrix] = useState<TokenPolicyMatrixEntry[]>([]);
+  const [tokenDrafts, setTokenDrafts] = useState<Record<string, string[]>>({});
 
   const [adminStrategies, setAdminStrategies] = useState<AdminStrategy[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
@@ -59,16 +89,56 @@ export default function StrategiesPage() {
 
   const loadStrategies = useCallback(async () => {
     setIsLoading(true);
-    const res = await authFetch("/v1/me/strategies/catalog");
+    const [catalogRes, configuredRes] = await Promise.all([
+      authFetch("/v1/me/strategies/catalog"),
+      authFetch("/v1/me/strategies"),
+    ]);
     setIsLoading(false);
-    if (!res || !res.ok) return;
-    const data = (await res.json()) as { strategies: CatalogStrategy[] };
+    if (!catalogRes || !catalogRes.ok) return;
+    const data = (await catalogRes.json()) as { strategies: CatalogStrategy[] };
     setCatalogStrategies(data.strategies ?? []);
+
+    if (!configuredRes || !configuredRes.ok) {
+      setConfiguredStrategies({});
+      return;
+    }
+
+    const configuredPayload = (await configuredRes.json()) as {
+      strategies: ConfiguredStrategy[];
+    };
+    const configuredMap = Object.fromEntries(
+      (configuredPayload.strategies ?? []).map((strategy) => [strategy.strategy_id, strategy]),
+    );
+    setConfiguredStrategies(configuredMap);
+    setTokenDrafts((current) => {
+      const next = { ...current };
+      for (const strategy of configuredPayload.strategies ?? []) {
+        if (next[strategy.strategy_id] === undefined) {
+          next[strategy.strategy_id] = getConfigSymbols(strategy.config);
+        }
+      }
+      return next;
+    });
   }, []);
 
   useEffect(() => {
     loadStrategies();
   }, [loadStrategies]);
+
+  const loadTokenControls = useCallback(async () => {
+    setTokensLoading(true);
+    const [tokens, matrixResponse] = await Promise.all([
+      getTokens(mode),
+      fetchUserTokenPolicyMatrix(),
+    ]);
+    setAvailableTokens(tokens.filter((token) => token.enabled));
+    setPolicyMatrix(matrixResponse.data ?? []);
+    setTokensLoading(false);
+  }, [mode]);
+
+  useEffect(() => {
+    void loadTokenControls();
+  }, [loadTokenControls]);
 
   const loadAdminStrategies = useCallback(async () => {
     if (!isRootAdmin) return;
@@ -146,6 +216,74 @@ export default function StrategiesPage() {
       setUserStatus(await parseErrorMessage(res));
       return;
     }
+    await loadStrategies();
+  };
+
+  const tokenOptionsByStrategy = useMemo(() => {
+    const tokenNameBySymbol = new Map(
+      availableTokens.map((token) => [token.symbol, token.name ?? token.symbol]),
+    );
+    const options = new Map<string, StrategyTokenOption[]>();
+
+    for (const entry of policyMatrix) {
+      if (!entry.platform_token_enabled || !entry.user_token_enabled) continue;
+      for (const policy of entry.strategy_policies) {
+        const strategyId = policy.strategy_id;
+        const current = options.get(strategyId) ?? [];
+        const displayName = tokenNameBySymbol.get(entry.token.symbol);
+        const status = policy.effective_recommendation_status;
+        current.push({
+          symbol: entry.token.symbol,
+          label:
+            displayName && displayName !== entry.token.symbol
+              ? `${entry.token.symbol} · ${displayName} · ${status}`
+              : `${entry.token.symbol} · ${status}`,
+          disabled: !policy.is_enabled || status === "blocked",
+        });
+        options.set(strategyId, current);
+      }
+    }
+
+    for (const [strategyId, rows] of options.entries()) {
+      rows.sort((left, right) => left.symbol.localeCompare(right.symbol));
+      options.set(strategyId, rows);
+    }
+
+    return options;
+  }, [availableTokens, policyMatrix]);
+
+  const saveStrategyTokens = async (strategy: CatalogStrategy) => {
+    const draft = tokenDrafts[strategy.strategy_id] ?? getConfigSymbols(configuredStrategies[strategy.strategy_id]?.config);
+    const existingConfig = { ...(configuredStrategies[strategy.strategy_id]?.config ?? {}) };
+    if (draft.length > 0) {
+      existingConfig.symbols = draft;
+    } else {
+      delete existingConfig.symbols;
+    }
+
+    setSavingKey(`tokens-${strategy.strategy_id}`);
+    setUserStatus(null);
+    const res = await authFetch(`/v1/me/strategies/${strategy.strategy_id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        is_enabled: configuredStrategies[strategy.strategy_id]?.is_enabled ?? strategy.is_user_enabled,
+        config: existingConfig,
+      }),
+    });
+    setSavingKey(null);
+    if (!res) {
+      setUserStatus("Could not reach API.");
+      return;
+    }
+    if (!res.ok) {
+      setUserStatus(await parseErrorMessage(res));
+      return;
+    }
+    setUserStatus(
+      draft.length > 0
+        ? `Saved ${draft.length} token${draft.length === 1 ? "" : "s"} for ${strategy.display_name}.`
+        : `Cleared token filter for ${strategy.display_name}; it will use all enabled tokens again.`,
+    );
     await loadStrategies();
   };
 
@@ -417,12 +555,32 @@ export default function StrategiesPage() {
         {isLoading
           ? Array.from({ length: 3 }).map((_, idx) => <RowSkeleton key={`strategy-skeleton-${idx}`} />)
           : catalogStrategies.length === 0
-            ? <section className="oz-panel p-3 text-sm text-muted">No strategies assigned to this account yet.</section>
-            : catalogStrategies.map((strategy) => {
-                const isActing = actionKey === strategy.strategy_id;
-                return (
-                  <article key={strategy.strategy_id} className="oz-panel p-3">
-                    <div className="flex items-start justify-between gap-2">
+              ? <section className="oz-panel p-3 text-sm text-muted">No strategies assigned to this account yet.</section>
+             : catalogStrategies.map((strategy) => {
+                 const isActing = actionKey === strategy.strategy_id;
+                 const isStrategicAllocation =
+                   strategy.strategy_id === "strategic_aggressive_allocation";
+                 const strategyOptions =
+                   tokenOptionsByStrategy.get(strategy.strategy_id) ??
+                   availableTokens
+                     .map((token) => ({
+                       symbol: token.symbol,
+                       label:
+                         token.name && token.name !== token.symbol
+                           ? `${token.symbol} · ${token.name}`
+                           : token.symbol,
+                       disabled: false,
+                     }))
+                     .sort((left, right) => left.symbol.localeCompare(right.symbol));
+                 const draftSymbols =
+                   tokenDrafts[strategy.strategy_id] ??
+                   getConfigSymbols(configuredStrategies[strategy.strategy_id]?.config);
+                 const unavailableSelected = draftSymbols.filter(
+                   (symbol) => !strategyOptions.some((option) => option.symbol === symbol),
+                 );
+                 return (
+                   <article key={strategy.strategy_id} className="oz-panel p-3">
+                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold">{strategy.display_name}</p>
                         <p className="text-xs text-muted">{strategy.description ?? "No description"}</p>
@@ -441,13 +599,90 @@ export default function StrategiesPage() {
                       >
                         {isActing ? "..." : strategy.is_user_enabled ? "Enabled" : "Disabled"}
                       </button>
-                    </div>
-                    {!strategy.is_platform_enabled ? (
-                      <p className="mt-2 text-xs text-amber-400">Platform-disabled. Tenant users cannot enable this strategy.</p>
-                    ) : null}
-                  </article>
-                );
-              })}
+                     </div>
+                     {!strategy.is_platform_enabled ? (
+                       <p className="mt-2 text-xs text-amber-400">Platform-disabled. Tenant users cannot enable this strategy.</p>
+                     ) : null}
+                     <section className="mt-3 rounded-lg border border-border bg-surface/40 p-3">
+                       <div className="flex items-center justify-between gap-2">
+                         <div>
+                           <p className="text-xs font-semibold uppercase tracking-wide text-muted">Strategy tokens</p>
+                           <p className="text-xs text-muted">
+                             Pick the tokens this strategy is allowed to trade. Leave empty to use all globally enabled tokens.
+                           </p>
+                         </div>
+                         <p className="text-xs text-muted">Selected: {draftSymbols.length}</p>
+                       </div>
+                       {isStrategicAllocation ? (
+                         <p className="mt-3 text-xs text-muted">
+                           Strategic Allocation already has its own token selectors on the Strategic Allocation page.
+                         </p>
+                       ) : tokensLoading ? (
+                         <div className="mt-3">
+                           <RowSkeleton />
+                         </div>
+                       ) : strategyOptions.length === 0 ? (
+                         <p className="mt-3 text-xs text-muted">
+                           No eligible tokens available yet. Enable tokens on the Tokens page first.
+                         </p>
+                       ) : (
+                         <>
+                           <select
+                             multiple
+                             className="mt-3 min-h-32 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                             value={draftSymbols}
+                             onChange={(event) =>
+                               setTokenDrafts((current) => ({
+                                 ...current,
+                                 [strategy.strategy_id]: Array.from(event.target.selectedOptions).map(
+                                   (option) => option.value,
+                                 ),
+                               }))
+                             }
+                           >
+                             {strategyOptions.map((option) => (
+                               <option
+                                 key={`${strategy.strategy_id}-${option.symbol}`}
+                                 value={option.symbol}
+                                 disabled={option.disabled}
+                               >
+                                 {option.label}
+                               </option>
+                             ))}
+                           </select>
+                           {unavailableSelected.length > 0 ? (
+                             <p className="mt-2 text-xs text-amber-400">
+                               Currently unavailable: {unavailableSelected.join(", ")}
+                             </p>
+                           ) : null}
+                           <div className="mt-3 flex flex-wrap gap-2">
+                             <button
+                               type="button"
+                               onClick={() =>
+                                 setTokenDrafts((current) => ({
+                                   ...current,
+                                   [strategy.strategy_id]: [],
+                                 }))
+                               }
+                               className="h-8 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-muted"
+                             >
+                               Use all enabled tokens
+                             </button>
+                             <button
+                               type="button"
+                               disabled={savingKey === `tokens-${strategy.strategy_id}`}
+                               onClick={() => saveStrategyTokens(strategy)}
+                               className="h-8 rounded-lg bg-amber-400 px-3 text-xs font-semibold text-slate-950 disabled:opacity-50"
+                             >
+                               {savingKey === `tokens-${strategy.strategy_id}` ? "Saving..." : "Save token list"}
+                             </button>
+                           </div>
+                         </>
+                       )}
+                     </section>
+                   </article>
+                 );
+               })}
       </div>
     </AppShell>
   );
