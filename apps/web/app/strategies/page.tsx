@@ -7,8 +7,8 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { useTradingMode } from "@/components/providers/trading-mode-provider";
 import { fetchUserTokenPolicyMatrix, type TokenPolicyMatrixEntry } from "@/lib/admin-token-policy";
 import { authFetch, parseErrorMessage } from "@/lib/auth-service";
-import { getTokens } from "@/lib/dashboard-api";
-import type { TokenItem } from "@/lib/dashboard-types";
+import { getDashboardDetails, getTokens } from "@/lib/dashboard-api";
+import type { DashboardDetails, TokenItem } from "@/lib/dashboard-types";
 import { RowSkeleton } from "@/components/ui/skeleton";
 
 type CatalogStrategy = {
@@ -50,6 +50,62 @@ type StrategyTokenOption = {
   disabled: boolean;
 };
 
+const STRATEGY_GUIDANCE: Record<
+  string,
+  {
+    cadence: string;
+    behavior: string;
+    riskHint: string;
+  }
+> = {
+  dca: {
+    cadence: "Evaluates every 5 minutes, but buys only when the interval is eligible.",
+    behavior: "Trades infrequently by design and can be healthy even when it is quiet.",
+    riskHint: "Best read as a paced accumulation strategy, not a constant signal generator.",
+  },
+  momentum: {
+    cadence: "Evaluates every 30 seconds looking for confirmed momentum setups.",
+    behavior: "Usually waits on confidence, volume, spread, or fee economics before acting.",
+    riskHint: "Strongest when fresh candles and volume confirmation line up together.",
+  },
+  day_trading: {
+    cadence: "Evaluates every 60 seconds for short-horizon breakout conditions.",
+    behavior: "Often stays quiet unless volume, volatility, and trend alignment all pass.",
+    riskHint: "Fast strategy, but still heavily filtered by execution quality and market freshness.",
+  },
+  reversion: {
+    cadence: "Evaluates every 60 seconds for stretched mean-reversion setups.",
+    behavior: "Selective by design; trend filters and bandwidth checks can keep it idle for long periods.",
+    riskHint: "Looks quiet in trending markets because it is waiting for oversold snap-back conditions.",
+  },
+  strategic_aggressive_allocation: {
+    cadence: "Evaluates hourly and manages bucket-level reallocations rather than frequent trades.",
+    behavior: "Acts more like a capital allocator than a high-frequency entry engine.",
+    riskHint: "Expect rebalance-style activity, profit-taking, and bucket management instead of constant signals.",
+  },
+};
+
+function normalizeStrategyKey(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+}
+
+function formatTimestamp(value: string | null | undefined) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return parsed.toLocaleString();
+}
+
+function formatReasonLabel(value: string | null | undefined) {
+  if (!value) return "—";
+  return value.replaceAll("_", " ");
+}
+
+function formatIntervalHours(value: number | null | undefined) {
+  if (!value || value <= 0) return null;
+  return value === 1 ? "1 hour" : `${value} hours`;
+}
+
 function getConfigSymbols(config: Record<string, unknown> | null | undefined): string[] {
   const requested = config?.symbols;
   if (!Array.isArray(requested)) return [];
@@ -65,11 +121,14 @@ export default function StrategiesPage() {
   const [configuredStrategies, setConfiguredStrategies] = useState<Record<string, ConfiguredStrategy>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [tokensLoading, setTokensLoading] = useState(true);
+  const [healthLoading, setHealthLoading] = useState(true);
   const [actionKey, setActionKey] = useState<string | null>(null);
   const [userStatus, setUserStatus] = useState<string | null>(null);
   const [availableTokens, setAvailableTokens] = useState<TokenItem[]>([]);
   const [policyMatrix, setPolicyMatrix] = useState<TokenPolicyMatrixEntry[]>([]);
   const [tokenDrafts, setTokenDrafts] = useState<Record<string, string[]>>({});
+  const [strategyHealth, setStrategyHealth] = useState<DashboardDetails["strategyHealth"]>([]);
+  const [botHealth, setBotHealth] = useState<DashboardDetails["botHealth"] | null>(null);
 
   const [adminStrategies, setAdminStrategies] = useState<AdminStrategy[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
@@ -124,6 +183,24 @@ export default function StrategiesPage() {
   useEffect(() => {
     loadStrategies();
   }, [loadStrategies]);
+
+  const loadStrategyHealth = useCallback(async () => {
+    setHealthLoading(true);
+    const details = await getDashboardDetails(mode);
+    if (!details) {
+      setStrategyHealth([]);
+      setBotHealth(null);
+      setHealthLoading(false);
+      return;
+    }
+    setStrategyHealth(details.strategyHealth ?? []);
+    setBotHealth(details.botHealth ?? null);
+    setHealthLoading(false);
+  }, [mode]);
+
+  useEffect(() => {
+    void loadStrategyHealth();
+  }, [loadStrategyHealth]);
 
   const loadTokenControls = useCallback(async () => {
     setTokensLoading(true);
@@ -216,7 +293,7 @@ export default function StrategiesPage() {
       setUserStatus(await parseErrorMessage(res));
       return;
     }
-    await loadStrategies();
+    await Promise.all([loadStrategies(), loadStrategyHealth()]);
   };
 
   const tokenOptionsByStrategy = useMemo(() => {
@@ -252,6 +329,13 @@ export default function StrategiesPage() {
     return options;
   }, [availableTokens, policyMatrix]);
 
+  const strategyHealthById = useMemo(() => {
+    const entries = strategyHealth.map(
+      (entry) => [normalizeStrategyKey(entry.id), entry] as const,
+    );
+    return new Map<string, DashboardDetails["strategyHealth"][number]>(entries);
+  }, [strategyHealth]);
+
   const saveStrategyTokens = async (strategy: CatalogStrategy) => {
     const draft = tokenDrafts[strategy.strategy_id] ?? getConfigSymbols(configuredStrategies[strategy.strategy_id]?.config);
     const existingConfig = { ...(configuredStrategies[strategy.strategy_id]?.config ?? {}) };
@@ -284,7 +368,7 @@ export default function StrategiesPage() {
         ? `Saved ${draft.length} token${draft.length === 1 ? "" : "s"} for ${strategy.display_name}.`
         : `Cleared token filter for ${strategy.display_name}; it will use all enabled tokens again.`,
     );
-    await loadStrategies();
+    await Promise.all([loadStrategies(), loadStrategyHealth()]);
   };
 
   const togglePlatformEnabled = async (adminStrategyId: string, currentEnabled: boolean) => {
@@ -297,7 +381,7 @@ export default function StrategiesPage() {
       return;
     }
     setAdminStatus(null);
-    await Promise.all([loadAdminStrategies(), loadStrategies()]);
+    await Promise.all([loadAdminStrategies(), loadStrategies(), loadStrategyHealth()]);
   };
 
   const deletePlatformStrategy = async (strategy: AdminStrategy) => {
@@ -545,6 +629,34 @@ export default function StrategiesPage() {
       ) : null}
 
       {userStatus ? <p className="px-1 text-xs text-amber-400">{userStatus}</p> : null}
+      {healthLoading ? (
+        <RowSkeleton />
+      ) : botHealth ? (
+        <section className="oz-panel mb-2 space-y-2 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Strategy health</p>
+            <span className="rounded-full border border-border bg-surface px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+              {botHealth.mode}
+            </span>
+            <span
+              className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+                botHealth.overallStatus === "healthy"
+                  ? "border-positive/40 bg-positive/15 text-positive"
+                  : botHealth.overallStatus === "critical"
+                    ? "border-negative/40 bg-negative/15 text-negative"
+                    : "border-amber-500/40 bg-amber-500/15 text-amber-100"
+              }`}
+            >
+              {formatReasonLabel(botHealth.overallStatus)}
+            </span>
+          </div>
+          <p className="text-sm text-foreground">{botHealth.quietReason}</p>
+          <p className="text-xs text-muted">
+            Reconciliation {formatReasonLabel(botHealth.reconciliation.status)} · Market data{" "}
+            {formatReasonLabel(botHealth.marketData.status)} · Last trade {formatTimestamp(botHealth.lastSuccessfulTradeAt)}
+          </p>
+        </section>
+      ) : null}
       {isRootAdmin ? (
         <section className="oz-panel mb-2 p-3 text-xs text-muted">
           Root admin accounts see the full strategy catalog by default. Tenant users only see strategies assigned by trial or subscription.
@@ -556,13 +668,32 @@ export default function StrategiesPage() {
           ? Array.from({ length: 3 }).map((_, idx) => <RowSkeleton key={`strategy-skeleton-${idx}`} />)
           : catalogStrategies.length === 0
               ? <section className="oz-panel p-3 text-sm text-muted">No strategies assigned to this account yet.</section>
-             : catalogStrategies.map((strategy) => {
-                 const isActing = actionKey === strategy.strategy_id;
-                 const isStrategicAllocation =
-                   strategy.strategy_id === "strategic_aggressive_allocation";
-                 const strategyOptions =
-                   tokenOptionsByStrategy.get(strategy.strategy_id) ??
-                   availableTokens
+              : catalogStrategies.map((strategy) => {
+                  const isActing = actionKey === strategy.strategy_id;
+                  const isStrategicAllocation =
+                    strategy.strategy_id === "strategic_aggressive_allocation";
+                  const strategyKey = normalizeStrategyKey(strategy.strategy_id);
+                  const health = strategyHealthById.get(strategyKey) ?? null;
+                  const guidance = STRATEGY_GUIDANCE[strategyKey] ?? {
+                    cadence: "Cadence depends on strategy configuration and market conditions.",
+                    behavior: "This strategy can remain quiet when its validation gates are not satisfied.",
+                    riskHint: "Use the blocker state below to see why it is active, waiting, or blocked.",
+                  };
+                  const dcaTiming =
+                    strategyKey === "dca"
+                      ? [
+                          health?.lastBuyAt ? `Last buy ${formatTimestamp(health.lastBuyAt)}` : null,
+                          formatIntervalHours(health?.dcaIntervalHours)
+                            ? `Interval ${formatIntervalHours(health?.dcaIntervalHours)}`
+                            : null,
+                          health?.nextEligibleAt ? `Next eligible ${formatTimestamp(health.nextEligibleAt)}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
+                      : null;
+                  const strategyOptions =
+                    tokenOptionsByStrategy.get(strategy.strategy_id) ??
+                    availableTokens
                      .map((token) => ({
                        symbol: token.symbol,
                        label:
@@ -579,18 +710,18 @@ export default function StrategiesPage() {
                    (symbol) => !strategyOptions.some((option) => option.symbol === symbol),
                  );
                  return (
-                   <article key={strategy.strategy_id} className="oz-panel p-3">
-                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold">{strategy.display_name}</p>
-                        <p className="text-xs text-muted">{strategy.description ?? "No description"}</p>
+                    <article key={strategy.strategy_id} className="oz-panel p-3">
+                      <div className="flex items-start justify-between gap-2">
+                       <div className="min-w-0">
+                         <p className="text-sm font-semibold">{strategy.display_name}</p>
+                         <p className="text-xs text-muted">{strategy.description ?? "No description"}</p>
                         <p className="mt-1 font-mono text-xs text-muted/50">{strategy.strategy_id}</p>
                         {!isRootAdmin ? (
                           <p className="mt-1 text-xs text-muted/70">
-                            {strategy.configured ? "Assigned and configured" : "Assigned by subscription or trial"}
-                          </p>
-                        ) : null}
-                      </div>
+                             {strategy.configured ? "Assigned and configured" : "Assigned by subscription or trial"}
+                           </p>
+                         ) : null}
+                       </div>
                       <button
                         type="button"
                         disabled={isActing || (!isRootAdmin && !strategy.is_platform_enabled)}
@@ -598,11 +729,81 @@ export default function StrategiesPage() {
                         className={`h-9 shrink-0 rounded-lg px-3 text-xs font-semibold disabled:opacity-50 ${strategy.is_user_enabled ? "bg-positive/20 text-positive" : "border border-border bg-surface text-muted"}`}
                       >
                         {isActing ? "..." : strategy.is_user_enabled ? "Enabled" : "Disabled"}
-                      </button>
-                     </div>
-                     {!strategy.is_platform_enabled ? (
-                       <p className="mt-2 text-xs text-amber-400">Platform-disabled. Tenant users cannot enable this strategy.</p>
-                     ) : null}
+                        </button>
+                      </div>
+                      <section className="mt-3 rounded-lg border border-border bg-surface/40 p-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+                              health?.currentStatus === "ready" || health?.currentStatus === "managing_position"
+                                ? "border-positive/40 bg-positive/15 text-positive"
+                                : health?.currentStatus === "blocked"
+                                  ? "border-negative/40 bg-negative/15 text-negative"
+                                  : "border-border bg-card text-muted"
+                            }`}
+                          >
+                            {formatReasonLabel(health?.currentStatus ?? (strategy.is_user_enabled ? "enabled" : "disabled"))}
+                          </span>
+                          <span className="rounded-full border border-border bg-card px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                            {strategy.is_user_enabled ? "enabled" : "disabled"}
+                          </span>
+                          {health?.blockingReasonCode ? (
+                            <span className="rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-100">
+                              {formatReasonLabel(health.blockingReasonCode)}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-muted sm:grid-cols-2">
+                          <div>
+                            <p className="font-semibold uppercase tracking-wide text-muted">Expected cadence</p>
+                            <p className="mt-1 text-foreground">{guidance.cadence}</p>
+                          </div>
+                          <div>
+                            <p className="font-semibold uppercase tracking-wide text-muted">Expected behavior</p>
+                            <p className="mt-1 text-foreground">{guidance.behavior}</p>
+                          </div>
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted">
+                          <div>Last evaluation {formatTimestamp(health?.lastEvaluatedAt)}</div>
+                          <div className="text-right">Last signal {formatTimestamp(health?.lastSignalAt)}</div>
+                          <div>
+                            Last action {health?.lastSignalAction ? formatReasonLabel(health.lastSignalAction) : "—"}
+                          </div>
+                          <div className="text-right">
+                            {strategyKey === "dca" ? "Last buy" : "Last trade"}{" "}
+                            {formatTimestamp(strategyKey === "dca" ? health?.lastBuyAt : health?.lastTradeAt)}
+                          </div>
+                          <div>Open positions {health?.openPositions ?? 0}</div>
+                          <div className="text-right">Allocation {health?.allocationPct ?? 0}%</div>
+                        </div>
+                        <div className="mt-3 rounded-lg border border-border/70 bg-card px-3 py-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Current blocker</p>
+                          <p className="mt-1 text-sm text-foreground">
+                            {health?.blockingReasonDetail ??
+                              health?.lastSignalReason ??
+                              (strategy.is_user_enabled
+                                ? "No blocker recorded right now. This strategy should evaluate normally."
+                                : "Enable this strategy to allow it to evaluate and trade.")}
+                          </p>
+                          <p className="mt-1 text-[11px] text-muted">
+                            {[
+                              dcaTiming,
+                              health?.exitMonitoredPositions
+                                ? `Exit watch ${health.exitMonitoredPositions}`
+                                : null,
+                              health?.stalledExitCount
+                                ? `Stalled exits ${health.stalledExitCount}`
+                                : null,
+                              guidance.riskHint,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </div>
+                      </section>
+                      {!strategy.is_platform_enabled ? (
+                        <p className="mt-2 text-xs text-amber-400">Platform-disabled. Tenant users cannot enable this strategy.</p>
+                      ) : null}
                      <section className="mt-3 rounded-lg border border-border bg-surface/40 p-3">
                        <div className="flex items-center justify-between gap-2">
                          <div>

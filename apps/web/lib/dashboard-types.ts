@@ -19,6 +19,78 @@ export type DashboardOverview = {
 
 export type DashboardDetails = {
   enabledStrategies: Array<{ id: string; name: string; enabled: boolean; allocationPct: number }>;
+  strategyHealth: Array<{
+    id: string;
+    name: string;
+    enabled: boolean;
+    allocationPct: number;
+    assignedCapital: number;
+    availableCash: number;
+    deployedCapital: number;
+    utilizationPct: number;
+    realizedPnl: number;
+    unrealizedPnl: number;
+    currentStatus: "disabled" | "managing_position" | "exit_monitoring" | "blocked" | "waiting" | "ready" | "inactive";
+    openPositions: number;
+    lastEvaluatedAt: string | null;
+    lastSignalAt: string | null;
+    lastSignalAction: string | null;
+    lastSignalReason: string | null;
+    lastTradeAt: string | null;
+    lastBuyAt: string | null;
+    dcaIntervalHours: number | null;
+    exitMonitoredPositions: number;
+    stalledExitCount: number;
+    latestExitAt: string | null;
+    latestExitReasonCode: string | null;
+    latestExitReasonDetail: string | null;
+    blockingReasonCode: string | null;
+    blockingReasonDetail: string | null;
+    nextEligibleAt: string | null;
+    latestLifecycleStage: string | null;
+    latestLifecycleStatus: string | null;
+  }>;
+  botHealth: {
+    overallStatus: "healthy" | "warning" | "critical" | "unknown";
+    runtimeStatus: string;
+    pipelineStatus: string;
+    mode: TradingMode;
+    activeStrategies: number;
+    activePositions: number;
+    criticalDiagnosticsCount: number;
+    lastSuccessfulTradeAt: string | null;
+    quietReasonCode: string;
+    quietReason: string;
+    marketData: {
+      status: "fresh" | "warning" | "stale" | "unknown";
+      lastAt: string | null;
+      ageSeconds: number | null;
+      tradeTicksRecent: number;
+      bboUpdatesRecent: number;
+    };
+    reconciliation: {
+      status: "healthy" | "warning" | "critical";
+      mismatchCount: number;
+      scopeCount: number;
+      bucketCount: number;
+      externalErrorCount: number;
+      topMismatchTypes: Array<{ type: string; count: number }>;
+    };
+    paperLive: {
+      currentMode: TradingMode;
+      canSwitchToLive: boolean;
+      liveReadinessReason: string | null;
+      strictPaperModeAvailable: boolean;
+      paperWarning: string;
+      connectionStatus: string;
+      checklist: Array<{
+        id: string;
+        label: string;
+        passed: boolean;
+        detail: string | null;
+      }>;
+    };
+  };
   positions: Array<{
     id: string;
     symbol: string;
@@ -34,6 +106,12 @@ export type DashboardDetails = {
     closedAt: string | null;
     ageMinutes: number | null;
     ageHours: number | null;
+    exitStatus: "monitoring" | "triggered" | "requested" | "stalled" | null;
+    exitStage: string | null;
+    exitReasonCode: string | null;
+    exitReasonDetail: string | null;
+    exitUpdatedAt: string | null;
+    exitStalled: boolean;
   }>;
   activeTrades: Array<{
     id: string;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -21,6 +21,25 @@ type AdminToken = {
   sort_order: number;
 };
 
+type ConfiguredStrategy = {
+  strategy_id: string;
+  is_enabled: boolean;
+  config: Record<string, unknown>;
+};
+
+function getConfigSymbols(config: Record<string, unknown> | null | undefined): string[] {
+  const requested = config?.symbols;
+  if (!Array.isArray(requested)) return [];
+  return requested
+    .map((value) => String(value || "").trim().toUpperCase())
+    .filter(Boolean);
+}
+
+function formatReasonLabel(value: string | null | undefined) {
+  if (!value) return "—";
+  return value.replaceAll("_", " ");
+}
+
 export default function TokensPage() {
   const { mode } = useTradingMode();
   const { role } = useAuth();
@@ -36,17 +55,31 @@ export default function TokensPage() {
   const [displayName, setDisplayName] = useState("");
   const [policyMatrix, setPolicyMatrix] = useState<TokenPolicyMatrixEntry[]>([]);
   const [policyLoading, setPolicyLoading] = useState(true);
+  const [configuredStrategies, setConfiguredStrategies] = useState<Record<string, ConfiguredStrategy>>({});
 
-  const loadUserTokens = useCallback(() => {
+  const loadUserTokens = useCallback(async () => {
     setIsLoading(true);
-    getTokens(mode)
-      .then((rows) => setTokens(rows))
-      .finally(() => setIsLoading(false));
+    const rows = await getTokens(mode);
+    setTokens(rows);
+    setIsLoading(false);
   }, [mode]);
 
   useEffect(() => {
-    loadUserTokens();
+    void loadUserTokens();
   }, [loadUserTokens]);
+
+  const loadConfiguredStrategies = useCallback(async () => {
+    const res = await authFetch("/v1/me/strategies");
+    if (!res || !res.ok) {
+      setConfiguredStrategies({});
+      return;
+    }
+    const payload = (await res.json()) as { strategies: ConfiguredStrategy[] };
+    const next = Object.fromEntries(
+      (payload.strategies ?? []).map((strategy) => [strategy.strategy_id, strategy]),
+    );
+    setConfiguredStrategies(next);
+  }, []);
 
   const isRootAdmin = role === "root_admin";
 
@@ -86,6 +119,10 @@ export default function TokensPage() {
     void loadPolicyMatrix();
   }, [loadPolicyMatrix]);
 
+  useEffect(() => {
+    void loadConfiguredStrategies();
+  }, [loadConfiguredStrategies]);
+
   const onCreateToken = async () => {
     setAdminStatus(null);
     if (!symbol.trim()) {
@@ -123,7 +160,7 @@ export default function TokensPage() {
     const res = await authFetch(`/v1/me/tokens/${token.id}/${action}`, { method: "POST" });
     setTogglingToken(null);
     if (!res || !res.ok) return;
-    loadUserTokens();
+    await Promise.all([loadUserTokens(), loadPolicyMatrix()]);
   };
 
   const toggleAdminToken = async (token: AdminToken) => {
@@ -140,8 +177,42 @@ export default function TokensPage() {
       setAdminStatus(await parseErrorMessage(res));
       return;
     }
-    await loadAdminTokens();
+    await Promise.all([loadAdminTokens(), loadPolicyMatrix(), loadUserTokens()]);
   };
+
+  const tokenEnabledById = useMemo(
+    () => new Map(tokens.map((token) => [token.id, token.enabled])),
+    [tokens],
+  );
+
+  const matrixSummary = useMemo(() => {
+    let blockedPairs = 0;
+    let discouragedPairs = 0;
+    let tradablePairs = 0;
+    let assignedPairs = 0;
+    for (const entry of policyMatrix) {
+      for (const policy of entry.strategy_policies) {
+        const configured = configuredStrategies[policy.strategy_id];
+        const selectedSymbols = getConfigSymbols(configured?.config);
+        const assigned =
+          selectedSymbols.length === 0 || selectedSymbols.includes(entry.token.symbol.toUpperCase());
+        if (assigned) assignedPairs += 1;
+        if (!policy.is_enabled || !assigned || !configured?.is_enabled) continue;
+        if (!entry.platform_token_enabled || !entry.user_token_enabled) continue;
+        if (policy.effective_recommendation_status === "blocked") blockedPairs += 1;
+        else if (policy.effective_recommendation_status === "discouraged") discouragedPairs += 1;
+        else tradablePairs += 1;
+      }
+    }
+    return {
+      enabledTokens: tokens.filter((token) => token.enabled).length,
+      totalTokens: tokens.length,
+      blockedPairs,
+      discouragedPairs,
+      tradablePairs,
+      assignedPairs,
+    };
+  }, [configuredStrategies, policyMatrix, tokens]);
 
   return (
     <AppShell title="Token Selection" subtitle="Allowlist is scoped to selected trading mode.">
@@ -212,6 +283,29 @@ export default function TokensPage() {
         <p className="text-xs text-muted">
           Current mode token policy: <span className="font-semibold uppercase text-foreground">{mode}</span>
         </p>
+        <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+          <div className="rounded-lg border border-border bg-surface px-3 py-2">
+            <p className="uppercase tracking-wide text-muted">Enabled tokens</p>
+            <p className="mt-1 text-sm font-semibold text-foreground">
+              {matrixSummary.enabledTokens}/{matrixSummary.totalTokens}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-surface px-3 py-2">
+            <p className="uppercase tracking-wide text-muted">Tradable pairs</p>
+            <p className="mt-1 text-sm font-semibold text-positive">{matrixSummary.tradablePairs}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-surface px-3 py-2">
+            <p className="uppercase tracking-wide text-muted">Discouraged pairs</p>
+            <p className="mt-1 text-sm font-semibold text-amber-300">{matrixSummary.discouragedPairs}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-surface px-3 py-2">
+            <p className="uppercase tracking-wide text-muted">Blocked pairs</p>
+            <p className="mt-1 text-sm font-semibold text-negative">{matrixSummary.blockedPairs}</p>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-muted">
+          A token can be globally enabled and still not trade if the strategy is off, the token is not assigned to that strategy, or admin policy marks the pair blocked/discouraged.
+        </p>
       </section>
 
       <div className="space-y-2">
@@ -248,7 +342,9 @@ export default function TokensPage() {
       <section className="oz-panel space-y-3 p-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-muted">Token Strategy Eligibility</p>
-          <p className="text-xs text-muted">This matrix is the extra gating layer on top of your token list and enabled strategies.</p>
+          <p className="text-xs text-muted">
+            This matrix shows the final effective tradeability for each token/strategy pair after global enablement, strategy assignment, strategy toggle, and admin policy are combined.
+          </p>
         </div>
         {policyLoading ? (
           <RowSkeleton />
@@ -262,16 +358,56 @@ export default function TokensPage() {
                   <div>
                     <p className="text-sm font-semibold">{entry.token.symbol}</p>
                     <p className="text-xs text-muted">
-                      Platform {entry.platform_token_enabled ? "enabled" : "disabled"} · You {entry.user_token_enabled ? "enabled" : "disabled"}
+                      Platform {entry.platform_token_enabled ? "enabled" : "disabled"} · You{" "}
+                      {tokenEnabledById.get(entry.token.id) ?? entry.user_token_enabled ? "enabled" : "disabled"}
                     </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-[11px]">
+                    <span className="rounded-full border border-border bg-card px-2 py-1 text-muted">
+                      Assignments {entry.strategy_policies.length}
+                    </span>
+                    <span className="rounded-full border border-positive/40 bg-positive/15 px-2 py-1 text-positive">
+                      Active{" "}
+                      {
+                        entry.strategy_policies.filter(
+                          (policy) =>
+                            policy.is_enabled &&
+                            policy.effective_recommendation_status !== "blocked",
+                        ).length
+                      }
+                    </span>
                   </div>
                 </div>
                 <div className="mt-3 grid gap-2">
                   {entry.strategy_policies.map((policy) => {
                     const userStrategy = entry.strategies?.find((row) => row.strategy_id === policy.strategy_id);
+                    const configured = configuredStrategies[policy.strategy_id];
+                    const configuredSymbols = getConfigSymbols(configured?.config);
+                    const assignmentState =
+                      configuredSymbols.length === 0
+                        ? "uses_all_enabled_tokens"
+                        : configuredSymbols.includes(entry.token.symbol.toUpperCase())
+                          ? "assigned"
+                          : "not_assigned";
+                    const strategyEnabled = Boolean(userStrategy?.is_user_enabled ?? configured?.is_enabled);
+                    const effectiveAction =
+                      !entry.platform_token_enabled || !(tokenEnabledById.get(entry.token.id) ?? entry.user_token_enabled)
+                        ? "token_disabled"
+                        : !strategyEnabled
+                          ? "strategy_disabled"
+                          : assignmentState === "not_assigned"
+                            ? "not_assigned"
+                            : !policy.is_enabled
+                              ? "pair_disabled"
+                              : policy.effective_recommendation_status === "blocked"
+                                ? "blocked"
+                                : policy.effective_recommendation_status === "discouraged"
+                                  ? "discouraged"
+                                  : "tradable";
                     return (
                       <div key={`${entry.token.id}-${policy.strategy_id}`} className="rounded-lg bg-surface p-3">
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                           <p className="text-sm font-medium">{policy.strategy_display_name ?? policy.strategy_id}</p>
                           <span
                             className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
@@ -286,12 +422,55 @@ export default function TokensPage() {
                           >
                             {policy.effective_recommendation_status}
                           </span>
+                          </div>
+                          <span
+                            className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
+                              effectiveAction === "tradable"
+                                ? "bg-positive/15 text-positive"
+                                : effectiveAction === "discouraged"
+                                  ? "bg-amber-400/20 text-amber-300"
+                                  : "bg-negative/15 text-negative"
+                            }`}
+                          >
+                            {formatReasonLabel(effectiveAction)}
+                          </span>
+                        </div>
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-muted sm:grid-cols-4">
+                          <div className="rounded-lg border border-border bg-card px-2 py-2">
+                            <p className="uppercase tracking-wide text-muted/80">Global token</p>
+                            <p className="mt-1 font-semibold text-foreground">
+                              {entry.platform_token_enabled && (tokenEnabledById.get(entry.token.id) ?? entry.user_token_enabled)
+                                ? "Enabled"
+                                : "Disabled"}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-border bg-card px-2 py-2">
+                            <p className="uppercase tracking-wide text-muted/80">Strategy</p>
+                            <p className="mt-1 font-semibold text-foreground">
+                              {strategyEnabled ? "Enabled" : "Disabled"}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-border bg-card px-2 py-2">
+                            <p className="uppercase tracking-wide text-muted/80">Assignment</p>
+                            <p className="mt-1 font-semibold text-foreground">
+                              {formatReasonLabel(assignmentState)}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-border bg-card px-2 py-2">
+                            <p className="uppercase tracking-wide text-muted/80">Pair policy</p>
+                            <p className="mt-1 font-semibold text-foreground">
+                              {policy.is_enabled ? "Enabled" : "Disabled"}
+                            </p>
+                          </div>
                         </div>
                         <p className="mt-1 text-xs text-muted">
-                          Strategy {userStrategy?.is_user_enabled ? "enabled" : "disabled"} · pair {policy.is_enabled ? "enabled" : "disabled"} · size multiplier {policy.size_multiplier.toFixed(2)}
+                          Size multiplier {policy.size_multiplier.toFixed(2)} · Recommendation{" "}
+                          {formatReasonLabel(policy.effective_recommendation_status)}
                         </p>
                         <p className="mt-1 text-xs text-muted">
-                          {policy.recommendation_reason ?? "No policy note recorded."}
+                          {policy.effective_recommendation_reason ??
+                            policy.recommendation_reason ??
+                            "No policy note recorded."}
                         </p>
                       </div>
                     );

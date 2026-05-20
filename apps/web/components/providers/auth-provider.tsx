@@ -84,15 +84,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (status === "loading") return;
     const isPublicPath = PUBLIC_PATHS.has(pathname);
+    const isAdminPath = pathname.startsWith("/admin");
 
     if (status === "unauthenticated" && !isPublicPath) {
       router.replace("/login");
       return;
     }
+    if (status === "authenticated" && isAdminPath && user?.role !== "root_admin") {
+      router.replace("/dashboard");
+      return;
+    }
     if (status === "authenticated" && pathname === "/login") {
       router.replace("/dashboard");
     }
-  }, [pathname, router, status]);
+  }, [pathname, router, status, user?.role]);
 
   const loginWithPassword = useCallback(
     async (email: string, password: string) => {

@@ -78,7 +78,13 @@ function clearAuthMarkerCookie(): void {
 
 export function getStoredAccessToken(): string | null {
   if (!canUseBrowserStorage()) return null;
-  return window.localStorage.getItem(ACCESS_TOKEN_KEY);
+  const sessionToken = window.sessionStorage.getItem(ACCESS_TOKEN_KEY);
+  if (sessionToken) return sessionToken;
+  const legacyToken = window.localStorage.getItem(ACCESS_TOKEN_KEY);
+  if (!legacyToken) return null;
+  window.sessionStorage.setItem(ACCESS_TOKEN_KEY, legacyToken);
+  window.localStorage.removeItem(ACCESS_TOKEN_KEY);
+  return legacyToken;
 }
 
 export function getStoredRefreshToken(): string | null {
@@ -87,18 +93,20 @@ export function getStoredRefreshToken(): string | null {
 }
 
 export function hasStoredTokens(): boolean {
-  return Boolean(getStoredAccessToken() && getStoredRefreshToken());
+  return Boolean(getStoredAccessToken() || getStoredRefreshToken());
 }
 
 export function storeTokenPair(tokens: TokenPair): void {
   if (!canUseBrowserStorage()) return;
-  window.localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
+  window.sessionStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
+  window.localStorage.removeItem(ACCESS_TOKEN_KEY);
   window.localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
   setAuthMarkerCookie();
 }
 
 export function clearStoredSession(): void {
   if (!canUseBrowserStorage()) return;
+  window.sessionStorage.removeItem(ACCESS_TOKEN_KEY);
   window.localStorage.removeItem(ACCESS_TOKEN_KEY);
   window.localStorage.removeItem(REFRESH_TOKEN_KEY);
   clearAuthMarkerCookie();
@@ -220,8 +228,12 @@ export async function authFetch(
   behavior: AuthFetchBehavior = {},
 ): Promise<Response | null> {
   const { clearSessionOn401 = true, eagerRefresh = true } = behavior;
+  const method = (init.method ?? "GET").toUpperCase();
   const baseHeaders = withRequestId(new Headers(init.headers));
-  if (!baseHeaders.has("Content-Type")) {
+  if (
+    !baseHeaders.has("Content-Type") &&
+    (method === "POST" || method === "PUT" || method === "PATCH")
+  ) {
     baseHeaders.set("Content-Type", "application/json");
   }
 
@@ -284,7 +296,7 @@ function modeToStorage(user: SessionUser): void {
 }
 
 export async function fetchSessionBootstrap(): Promise<SessionBootstrap> {
-  const meRes = await authFetch("/v1/me", undefined, { eagerRefresh: false });
+  const meRes = await authFetch("/v1/me");
   if (!meRes || !meRes.ok) {
     throw new Error(meRes ? await parseApiError(meRes) : "Could not reach API");
   }

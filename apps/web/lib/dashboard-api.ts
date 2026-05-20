@@ -148,8 +148,14 @@ export async function upsertCoinbaseConnection(
   return { connection: mapCoinbaseConnection(payload) };
 }
 
-export async function getDashboardSummary(mode: TradingMode): Promise<DashboardSummary | null> {
-  const payload = await fetchJson<DashboardSummary>("/v1/me/dashboard", { mode });
+export async function getDashboardSummary(
+  mode: TradingMode,
+  options: { forceRefresh?: boolean } = {},
+): Promise<DashboardSummary | null> {
+  const payload = await fetchJson<DashboardSummary>("/v1/me/dashboard", {
+    mode,
+    forceRefresh: options.forceRefresh,
+  });
   if (!payload) return null;
   return {
     availableBalance: payload.availableBalance ?? payload.portfolioValue,
@@ -167,6 +173,43 @@ export async function getDashboardSummary(mode: TradingMode): Promise<DashboardS
     avgNetEdgeAtEntryBps: payload.avgNetEdgeAtEntryBps ?? payload.feeAnalytics?.avgNetEdgeAtEntryBps ?? 0,
     totalRejected: payload.totalRejected ?? payload.rejectionDiagnostics?.totalRejected ?? 0,
     enabledStrategies: payload.enabledStrategies ?? [],
+    strategyHealth: payload.strategyHealth ?? [],
+    botHealth: payload.botHealth ?? {
+      overallStatus: "unknown",
+      runtimeStatus: "unknown",
+      pipelineStatus: "unknown",
+      mode,
+      activeStrategies: 0,
+      activePositions: 0,
+      criticalDiagnosticsCount: 0,
+      lastSuccessfulTradeAt: null,
+      quietReasonCode: "dashboard_unavailable",
+      quietReason: "Bot health is temporarily unavailable.",
+      marketData: {
+        status: "unknown",
+        lastAt: null,
+        ageSeconds: null,
+        tradeTicksRecent: 0,
+        bboUpdatesRecent: 0,
+      },
+      reconciliation: {
+        status: "healthy",
+        mismatchCount: 0,
+        scopeCount: 0,
+        bucketCount: 0,
+        externalErrorCount: 0,
+        topMismatchTypes: [],
+      },
+      paperLive: {
+        currentMode: mode,
+        canSwitchToLive: false,
+        liveReadinessReason: "Live readiness is temporarily unavailable.",
+        strictPaperModeAvailable: false,
+        paperWarning: "Paper results may not fully represent live trading conditions.",
+        connectionStatus: "unknown",
+        checklist: [],
+      },
+    },
     positions: payload.positions ?? [],
     activeTrades: payload.activeTrades ?? [],
     recentActivity: payload.recentActivity ?? [],

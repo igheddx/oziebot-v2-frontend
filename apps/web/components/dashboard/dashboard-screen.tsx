@@ -6,7 +6,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { GrowthChart } from "@/components/dashboard/growth-chart";
 import { TradeCardsHybrid } from "@/components/dashboard/trade-cards-hybrid";
 import { useTradingMode } from "@/components/providers/trading-mode-provider";
-import { getDashboardDetails, getDashboardOverview, getDashboardRejections } from "@/lib/dashboard-api";
+import { getDashboardRejections, getDashboardSummary } from "@/lib/dashboard-api";
 import type { DashboardDetails, DashboardOverview, DashboardRejections } from "@/lib/dashboard-types";
 import { CardSkeleton, RowSkeleton, Skeleton } from "@/components/ui/skeleton";
 
@@ -27,11 +27,49 @@ function formatStageLabel(value: string) {
   return value.replaceAll("_", " ");
 }
 
+function formatReasonLabel(value: string | null | undefined) {
+  if (!value) return "—";
+  return value.replaceAll("_", " ");
+}
+
+function formatIntervalHours(value: number | null | undefined) {
+  if (!value || value <= 0) return null;
+  return value === 1 ? "1 hour" : `${value} hours`;
+}
+
+function formatExitStatus(value: string | null | undefined) {
+  if (!value) return null;
+  return value === "stalled" ? "exit stalled" : value.replaceAll("_", " ");
+}
+
 function formatTimestamp(value: string | null) {
   if (!value) return "—";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "—";
   return parsed.toLocaleString();
+}
+
+function toneClass(tone: "positive" | "negative" | "warning" | "neutral") {
+  if (tone === "positive") return "text-positive";
+  if (tone === "negative") return "text-negative";
+  if (tone === "warning") return "text-amber-200";
+  return "text-foreground";
+}
+
+function badgeClass(tone: "positive" | "negative" | "warning" | "neutral") {
+  if (tone === "positive") return "border-positive/40 bg-positive/15 text-positive";
+  if (tone === "negative") return "border-negative/40 bg-negative/15 text-negative";
+  if (tone === "warning") return "border-amber-500/40 bg-amber-500/15 text-amber-100";
+  return "border-border bg-surface text-muted";
+}
+
+function healthTone(status: string | null | undefined): "positive" | "warning" | "negative" | "neutral" {
+  if (status === "healthy" || status === "fresh" || status === "ready" || status === "managing_position") {
+    return "positive";
+  }
+  if (status === "warning" || status === "waiting" || status === "exit_monitoring") return "warning";
+  if (status === "critical" || status === "blocked" || status === "stale") return "negative";
+  return "neutral";
 }
 
 function formatPositionAge(ageHours: number | null) {
@@ -82,25 +120,16 @@ export function DashboardScreen() {
       setDetailsError(null);
       setIsRefreshing(true);
       try {
-        const [nextOverview, nextDetails] = await Promise.all([
-          getDashboardOverview(mode, { forceRefresh }),
-          getDashboardDetails(mode, { forceRefresh }),
-        ]);
+        const nextDashboard = await getDashboardSummary(mode, { forceRefresh });
 
-        if (!nextOverview) {
+        if (!nextDashboard) {
           setOverview(null);
           setDetails(null);
           setError("Dashboard data is temporarily unavailable. Your trades and balances were not deleted.");
           return false;
         }
-        setOverview(nextOverview);
-
-        if (!nextDetails) {
-          setDetails(null);
-          setDetailsError("Detailed dashboard panels are temporarily unavailable.");
-        } else {
-          setDetails(nextDetails);
-        }
+        setOverview(nextDashboard);
+        setDetails(nextDashboard);
         return true;
       } catch {
         setOverview(null);
@@ -197,6 +226,9 @@ export function DashboardScreen() {
     );
   }, [details, positionSearch]);
 
+  const botHealth = details?.botHealth ?? null;
+  const strategyHealth = details?.strategyHealth ?? [];
+
   useEffect(() => {
     setVisiblePositionsCount(PAGE_SIZE);
   }, [positionSearch, details]);
@@ -263,13 +295,9 @@ export function DashboardScreen() {
               <article key={card.label} className="oz-panel p-3">
                 <p className="text-[11px] uppercase tracking-wide text-muted">{card.label}</p>
                 <p
-                  className={`mt-1 text-lg font-semibold ${
-                    card.tone === "positive"
-                      ? "text-positive"
-                      : card.tone === "negative"
-                        ? "text-negative"
-                        : "text-foreground"
-                  }`}
+                  className={`mt-1 text-lg font-semibold ${toneClass(
+                    card.tone === "positive" ? "positive" : card.tone === "negative" ? "negative" : "neutral",
+                  )}`}
                 >
                   {card.value}
                 </p>
@@ -277,6 +305,107 @@ export function DashboardScreen() {
               </article>
             ))}
           </section>
+
+          {botHealth ? (
+            <section className="oz-panel space-y-3 p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-sm font-semibold text-foreground">Bot Health</h2>
+                    <span
+                      className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${badgeClass(
+                        healthTone(botHealth.overallStatus),
+                      )}`}
+                    >
+                      {formatStageLabel(botHealth.overallStatus)}
+                    </span>
+                    <span className="rounded-full border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                      {botHealth.mode}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-muted">{botHealth.quietReason}</p>
+                </div>
+                <div className="text-xs text-muted sm:text-right">
+                  <div>Last trade {formatTimestamp(botHealth.lastSuccessfulTradeAt)}</div>
+                  <div>Market data {formatTimestamp(botHealth.marketData.lastAt)}</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {[
+                  ["Pipeline", formatStageLabel(botHealth.pipelineStatus), healthTone(botHealth.pipelineStatus)],
+                  [
+                    "Reconciliation",
+                    botHealth.reconciliation.mismatchCount === 0
+                      ? "Aligned"
+                      : `${botHealth.reconciliation.mismatchCount} mismatch${botHealth.reconciliation.mismatchCount === 1 ? "" : "es"}`,
+                    healthTone(botHealth.reconciliation.status),
+                  ],
+                  ["Critical findings", botHealth.criticalDiagnosticsCount.toString(), botHealth.criticalDiagnosticsCount > 0 ? "negative" : "neutral"],
+                  ["Active strategies", botHealth.activeStrategies.toString(), "neutral"],
+                  ["Open positions", botHealth.activePositions.toString(), "neutral"],
+                  [
+                    "Market freshness",
+                    botHealth.marketData.ageSeconds == null ? "Unknown" : `${Math.round(botHealth.marketData.ageSeconds)}s old`,
+                    healthTone(botHealth.marketData.status),
+                  ],
+                ].map(([label, value, tone]) => (
+                  <article key={label} className="rounded-xl border border-border/70 px-3 py-2">
+                    <p className="text-[11px] uppercase tracking-wide text-muted">{label}</p>
+                    <p className={`mt-1 text-sm font-semibold ${toneClass(tone as "positive" | "negative" | "warning" | "neutral")}`}>
+                      {value}
+                    </p>
+                  </article>
+                ))}
+              </div>
+
+              {botHealth.reconciliation.topMismatchTypes.length > 0 ? (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                  <p className="font-semibold uppercase tracking-wide">Top reconciliation mismatches</p>
+                  <p className="mt-1">
+                    {botHealth.reconciliation.topMismatchTypes
+                      .map((item) => `${formatReasonLabel(item.type)} (${item.count})`)
+                      .join(" · ")}
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="rounded-xl border border-border/70 px-3 py-3 text-xs">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="font-semibold uppercase tracking-wide text-muted">Paper vs live</p>
+                    <p className="mt-1 text-sm text-foreground">
+                      {botHealth.paperLive.canSwitchToLive
+                        ? "This account currently passes the live readiness gate."
+                        : botHealth.paperLive.liveReadinessReason ?? "Live readiness still has blockers."}
+                    </p>
+                  </div>
+                  <span
+                    className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${badgeClass(
+                      botHealth.paperLive.canSwitchToLive ? "positive" : "warning",
+                    )}`}
+                  >
+                    {botHealth.paperLive.canSwitchToLive ? "live ready" : "paper only"}
+                  </span>
+                </div>
+                <p className="mt-2 text-[11px] text-muted">{botHealth.paperLive.paperWarning}</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {botHealth.paperLive.checklist.map((item) => (
+                    <div key={item.id} className="rounded-lg border border-border/60 px-3 py-2">
+                      <p
+                        className={`text-[11px] font-semibold uppercase tracking-wide ${
+                          item.passed ? "text-positive" : "text-amber-200"
+                        }`}
+                      >
+                        {item.passed ? "ready" : "needs work"} · {item.label}
+                      </p>
+                      <p className="mt-1 text-muted">{item.detail ?? "No detail available."}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          ) : null}
 
           {details?.capitalUtilization?.byStrategy ? (
             <section className="oz-panel space-y-3 p-4">
@@ -509,21 +638,108 @@ export function DashboardScreen() {
               </section>
 
               <section className="space-y-3">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Enabled Strategies</h2>
-                <div className="space-y-2">
-                  {details.enabledStrategies
-                    .filter((item) => item.enabled)
-                    .map((item) => (
-                      <div key={item.id} className="oz-panel flex items-center justify-between p-3">
-                        <div>
-                          <p className="text-sm font-semibold">{item.name}</p>
-                          <p className="text-xs text-muted">Allocation {item.allocationPct}%</p>
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Strategy Health</h2>
+                  <p className="text-xs text-muted">
+                    Why each strategy is trading, waiting, blocked, or just monitoring.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                  {strategyHealth.map((item) => {
+                    const pnl = normalizeDisplayValue(item.realizedPnl + item.unrealizedPnl);
+                    const dcaTiming =
+                      item.id === "dca"
+                        ? [
+                            item.lastBuyAt ? `Last buy ${formatTimestamp(item.lastBuyAt)}` : null,
+                            formatIntervalHours(item.dcaIntervalHours)
+                              ? `Interval ${formatIntervalHours(item.dcaIntervalHours)}`
+                              : null,
+                            item.nextEligibleAt ? `Next eligible ${formatTimestamp(item.nextEligibleAt)}` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")
+                        : null;
+                    return (
+                      <article key={item.id} className="oz-panel space-y-3 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{item.name}</p>
+                            <p className="text-xs text-muted">
+                              Allocation {item.allocationPct}% · Deployed {formatMoney(item.deployedCapital)}
+                            </p>
+                          </div>
+                          <div className="flex flex-col items-end gap-2">
+                            <span
+                              className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${badgeClass(
+                                item.enabled ? "positive" : "neutral",
+                              )}`}
+                            >
+                              {item.enabled ? "enabled" : "disabled"}
+                            </span>
+                            <span
+                              className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${badgeClass(
+                                healthTone(item.currentStatus),
+                              )}`}
+                            >
+                              {formatStageLabel(item.currentStatus)}
+                            </span>
+                          </div>
                         </div>
-                        <span className="rounded-full bg-positive/15 px-2 py-1 text-[10px] font-semibold text-positive">
-                          ENABLED
-                        </span>
-                      </div>
-                    ))}
+
+                        <div className="grid grid-cols-2 gap-2 text-xs text-muted">
+                          <div>Last eval {formatTimestamp(item.lastEvaluatedAt)}</div>
+                          <div className="text-right">Last signal {formatTimestamp(item.lastSignalAt)}</div>
+                          <div>
+                            Last action {item.lastSignalAction ? formatStageLabel(item.lastSignalAction) : "—"}
+                          </div>
+                          <div className="text-right">
+                            {item.id === "dca" ? "Last buy" : "Last trade"}{" "}
+                            {formatTimestamp(item.id === "dca" ? item.lastBuyAt : item.lastTradeAt)}
+                          </div>
+                          <div>Open positions {item.openPositions}</div>
+                          <div className="text-right">Utilization {item.utilizationPct.toFixed(1)}%</div>
+                        </div>
+
+                        <div className="rounded-xl border border-border/70 px-3 py-2 text-xs">
+                          <p className="uppercase tracking-wide text-muted">Current blocker / reason</p>
+                          <p className="mt-1 text-sm text-foreground">
+                            {item.blockingReasonDetail ??
+                              item.lastSignalReason ??
+                              (item.currentStatus === "managing_position"
+                                ? "Managing an open position."
+                                : item.currentStatus === "ready"
+                                  ? "Evaluating normally."
+                                  : item.currentStatus === "inactive"
+                                    ? "No recent evaluation recorded."
+                                    : "No blocking reason recorded.")}
+                          </p>
+                          <p className="mt-1 text-[11px] text-muted">
+                            {[
+                              item.blockingReasonCode ? formatReasonLabel(item.blockingReasonCode) : null,
+                              dcaTiming ?? (item.nextEligibleAt ? `Next eligible ${formatTimestamp(item.nextEligibleAt)}` : null),
+                              item.exitMonitoredPositions > 0
+                                ? `Exit watch ${item.exitMonitoredPositions}`
+                                : null,
+                              item.stalledExitCount > 0
+                                ? `Stalled exits ${item.stalledExitCount}`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted">
+                            Capital {formatMoney(item.assignedCapital)} · Cash {formatMoney(item.availableCash)}
+                          </span>
+                          <span className={toneClass(pnl > 0 ? "positive" : pnl < 0 ? "negative" : "neutral")}>
+                            P&L {formatMoney(pnl)}
+                          </span>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               </section>
 
@@ -573,6 +789,25 @@ export function DashboardScreen() {
                               <span>Open Age {formatPositionAge(position.ageHours)}</span>
                               <span className="text-right">{position.side.toUpperCase()}</span>
                             </div>
+                            {position.exitStatus ? (
+                              <div className="mt-2 rounded-lg border border-border/70 px-3 py-2 text-xs">
+                                <p className="uppercase tracking-wide text-muted">Exit state</p>
+                                <p className="mt-1 text-sm text-foreground">
+                                  {formatExitStatus(position.exitStatus)}
+                                  {position.exitReasonDetail ? ` · ${position.exitReasonDetail}` : ""}
+                                </p>
+                                <p className="mt-1 text-[11px] text-muted">
+                                  {[
+                                    position.exitStage ? formatStageLabel(position.exitStage) : null,
+                                    position.exitUpdatedAt
+                                      ? `Updated ${formatTimestamp(position.exitUpdatedAt)}`
+                                      : null,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </p>
+                              </div>
+                            ) : null}
                             <p
                               className={`mt-2 text-sm font-semibold ${
                                 normalizedUnrealizedPnl === 0
