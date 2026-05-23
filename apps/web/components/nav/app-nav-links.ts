@@ -6,6 +6,7 @@ export const PRIMARY_NAV_LINKS = [
   { href: "/tokens", label: "Tokens" },
   { href: "/allocation", label: "Allocation" },
   { href: "/strategic-allocation", label: "Strategic Allocation" },
+  { href: "/volatility-harvest", label: "Volatility Harvest" },
   { href: "/alerts", label: "Alerts" },
 ] as const;
 

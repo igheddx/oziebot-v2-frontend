@@ -83,6 +83,11 @@ const STRATEGY_GUIDANCE: Record<
     behavior: "Acts more like a capital allocator than a high-frequency entry engine.",
     riskHint: "Expect rebalance-style activity, profit-taking, and bucket management instead of constant signals.",
   },
+  volatility_harvest: {
+    cadence: "Evaluates every 30 minutes and alternates between layered entries, partial harvests, and staged rebuys.",
+    behavior: "Keeps a long-term core bag while rotating only the trading slice during volatile price expansion and pullbacks.",
+    riskHint: "Best suited to liquid, high-volatility conviction assets where harvest profits can outrun fees and spread.",
+  },
 };
 
 function normalizeStrategyKey(value: string) {
