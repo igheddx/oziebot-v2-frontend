@@ -44,64 +44,67 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-4 py-8 sm:max-w-lg sm:px-6 sm:py-10">
-      <section className="oz-panel p-5 sm:p-7">
-        <div className="flex flex-col items-center text-center">
-          <Image
-            src={logo}
-            alt="Oziebot"
-            priority
-            className="h-auto w-44 sm:w-52"
-            sizes="(min-width: 640px) 208px, 176px"
-          />
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight">Welcome Back</h1>
-          <p className="mt-2 max-w-sm text-sm text-muted">
-            Log in to continue to your trading dashboard.
-          </p>
-        </div>
-
-        <form onSubmit={onSubmit} className="mt-6 space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="email" className="block text-xs font-semibold uppercase tracking-wide text-muted">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              placeholder="you@example.com"
-              className="h-12 w-full rounded-xl border border-border bg-card px-3 text-sm outline-none transition focus:border-sky-400"
+    <div className="teacher-assist-theme oz-login-shell min-h-dvh bg-background text-foreground">
+      <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-4 py-8 sm:max-w-lg sm:px-6 sm:py-10">
+        <section className="ta-panel p-6 sm:p-8">
+          <div className="flex flex-col items-center text-center">
+            <Image
+              src={logo}
+              alt="Oziebot"
+              priority
+              className="h-auto w-40 sm:w-48"
+              sizes="(min-width: 640px) 192px, 160px"
             />
+            <p className="mt-4 text-xs font-bold uppercase tracking-[0.2em] text-sky-700">Platform</p>
+            <h1 className="mt-2 text-2xl font-semibold text-slate-900">Sign in to OzieBot</h1>
+            <p className="mt-2 max-w-sm text-sm text-slate-600">
+              One account for TeacherAssist, Trading, and the rest of your OzieBot workspace.
+            </p>
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor="password" className="block text-xs font-semibold uppercase tracking-wide text-muted">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              placeholder="Enter your password"
-              className="h-12 w-full rounded-xl border border-border bg-card px-3 text-sm outline-none transition focus:border-sky-400"
-            />
-          </div>
+          <form onSubmit={onSubmit} className="mt-6 space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="email" className="ta-label">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                placeholder="you@example.com"
+                className="ta-input h-11"
+              />
+            </div>
 
-          {formError ? <p className="text-sm text-negative">{formError}</p> : null}
+            <div className="space-y-2">
+              <label htmlFor="password" className="ta-label">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                placeholder="Enter your password"
+                className="ta-input h-11"
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className="h-12 w-full rounded-xl bg-sky-500 font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSubmitting || status === "loading" ? "Signing in..." : "Log In"}
-          </button>
-        </form>
-      </section>
+            {formError ? <p className="ta-alert ta-alert-error">{formError}</p> : null}
+
+            <button type="submit" disabled={!canSubmit} className="ta-button-primary h-11 w-full">
+              {isSubmitting || status === "loading" ? "Signing in..." : "Sign in"}
+            </button>
+          </form>
+        </section>
+
+        <p className="mt-6 text-center text-xs text-slate-500">
+          After signing in, use the app switcher to open TeacherAssist, Trading, or your default module.
+        </p>
+      </div>
     </div>
   );
 }

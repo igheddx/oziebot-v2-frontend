@@ -12,6 +12,7 @@ import {
   SECONDARY_NAV_LINKS,
 } from "@/components/nav/app-nav-links";
 import { ModeBadge, ModeToggle } from "@/components/dashboard/mode-toggle";
+import { AppSwitcher } from "@/components/platform/app-switcher";
 import { useAuth } from "@/components/providers/auth-provider";
 import logo from "@/images/oziebot-logo.png";
 
@@ -82,6 +83,7 @@ export function AppShell({ title, subtitle, children, showModeToggle = true }: A
               />
             </Link>
             <div className="flex items-center gap-2">
+              <AppSwitcher />
               {showModeToggle ? <ModeBadge /> : null}
               <button
                 type="button"

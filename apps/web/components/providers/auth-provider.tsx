@@ -4,8 +4,17 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { usePathname, useRouter } from "next/navigation";
 
 import type { BillingSummary } from "@/lib/dashboard-types";
-import type { CoinbaseStatus, SessionUser, UserRole } from "@/lib/auth-types";
-import { clearStoredSession, fetchSessionBootstrap, hasStoredTokens, login, logout } from "@/lib/auth-service";
+import type { CoinbaseStatus, SessionProduct, SessionUser, UserRole } from "@/lib/auth-types";
+import {
+  clearStoredSession,
+  fetchSessionBootstrap,
+  hasStoredTokens,
+  login,
+  logout,
+  updateDefaultProduct,
+} from "@/lib/auth-service";
+import { fetchTeacherAssistV2Context } from "@/lib/teacher-assist-v2-api";
+import { productKeyForPathname, routeForProductKey } from "@/lib/products";
 
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
@@ -15,13 +24,18 @@ type AuthContextValue = {
   role: UserRole | null;
   billing: BillingSummary | null;
   coinbase: CoinbaseStatus | null;
+  products: SessionProduct[];
+  defaultProduct: string | null;
   loginWithPassword: (email: string, password: string) => Promise<void>;
+  setDefaultProduct: (productKey: string) => Promise<void>;
   logoutUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const PUBLIC_PATHS = new Set(["/login"]);
+function isPublicPath(pathname: string): boolean {
+  return pathname === "/login" || pathname.startsWith("/login/");
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -37,6 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setBilling(bootstrap.billing);
     setCoinbase(bootstrap.coinbase);
     setStatus("authenticated");
+    return bootstrap;
   }, []);
 
   useEffect(() => {
@@ -83,30 +98,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (status === "loading") return;
-    const isPublicPath = PUBLIC_PATHS.has(pathname);
+    const publicPath = isPublicPath(pathname);
     const isAdminPath = pathname.startsWith("/admin");
+    const routeProductKey = productKeyForPathname(pathname);
+    const products = user?.products ?? [];
+    const defaultProduct =
+      user?.default_product ??
+      products.find((product) => product.is_default)?.product_key ??
+      products[0]?.product_key ??
+      null;
+    const productKeys = new Set(products.map((product) => product.product_key));
+    const defaultRoute = routeForProductKey(defaultProduct);
 
-    if (status === "unauthenticated" && !isPublicPath) {
+    if (status === "unauthenticated" && !publicPath) {
       router.replace("/login");
       return;
     }
     if (status === "authenticated" && isAdminPath && user?.role !== "root_admin") {
-      router.replace("/dashboard");
+      router.replace(defaultRoute);
       return;
     }
-    if (status === "authenticated" && pathname === "/login") {
-      router.replace("/dashboard");
+    if (status === "authenticated" && (publicPath || pathname === "/")) {
+      router.replace(defaultRoute);
+      return;
     }
-  }, [pathname, router, status, user?.role]);
+    if (status === "authenticated" && routeProductKey && products.length > 0 && !productKeys.has(routeProductKey)) {
+      router.replace(defaultRoute);
+    }
+  }, [pathname, router, status, user]);
 
   const loginWithPassword = useCallback(
     async (email: string, password: string) => {
       await login(email, password);
-      await hydrateSession();
-      router.replace("/dashboard");
+      const bootstrap = await hydrateSession();
+      const defaultProduct =
+        bootstrap.user.default_product ??
+        bootstrap.user.products.find((product) => product.is_default)?.product_key ??
+        bootstrap.user.products[0]?.product_key ??
+        null;
+      if (defaultProduct === "teacher_assist") {
+        try {
+          const context = await fetchTeacherAssistV2Context();
+          router.replace(context.landing_route);
+          return;
+        } catch {
+          /* fall through to product route */
+        }
+      }
+      router.replace(routeForProductKey(defaultProduct));
     },
     [hydrateSession, router],
   );
+
+  const setDefaultProduct = useCallback(async (productKey: string) => {
+    const payload = await updateDefaultProduct(productKey);
+    setUser((current) =>
+      current
+        ? {
+            ...current,
+            products: payload.products,
+            default_product: payload.default_product,
+          }
+        : current,
+    );
+  }, []);
 
   const logoutUser = useCallback(async () => {
     await logout();
@@ -124,13 +179,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role: user?.role ?? null,
       billing,
       coinbase,
+      products: user?.products ?? [],
+      defaultProduct:
+        user?.default_product ??
+        user?.products.find((product) => product.is_default)?.product_key ??
+        user?.products[0]?.product_key ??
+        null,
       loginWithPassword,
+      setDefaultProduct,
       logoutUser,
     }),
-    [billing, coinbase, loginWithPassword, logoutUser, status, user],
+    [billing, coinbase, loginWithPassword, logoutUser, setDefaultProduct, status, user],
   );
 
-  if (status === "loading" && pathname !== "/login") {
+  if (status === "loading" && !isPublicPath(pathname)) {
     return (
       <div className="mx-auto flex min-h-dvh max-w-lg items-center justify-center px-6 text-sm text-muted">
         Loading session...

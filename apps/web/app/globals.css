@@ -49,3 +49,94 @@ body {
 .oz-mode-live {
   @apply border-amber-400/80 bg-amber-500/10 text-amber-200;
 }
+
+.teacher-assist-theme {
+  --background: #f4f7fb;
+  --foreground: #0f172a;
+  --muted: #64748b;
+  --card: #ffffff;
+  --border: #d9e2ef;
+  --surface: #edf3fb;
+  --positive: #059669;
+  --negative: #dc2626;
+}
+
+.oz-login-shell {
+  background:
+    radial-gradient(900px 420px at 10% -5%, rgba(56, 189, 248, 0.18), transparent 55%),
+    radial-gradient(800px 380px at 95% 0%, rgba(251, 191, 36, 0.12), transparent 58%),
+    var(--background);
+}
+
+.ta-panel {
+  @apply rounded-3xl border border-border bg-card/95 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur;
+}
+
+.ta-label {
+  @apply text-xs font-semibold uppercase tracking-[0.18em] text-slate-500;
+}
+
+.ta-input {
+  @apply w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-100;
+}
+
+.ta-input.h-9 {
+  @apply h-9 px-3 py-0 leading-9;
+}
+
+.ta-button-primary {
+  @apply inline-flex h-11 items-center justify-center rounded-2xl bg-sky-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.ta-button-secondary {
+  @apply inline-flex h-10 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50;
+}
+
+.ta-alert {
+  @apply rounded-2xl border px-4 py-3 text-sm;
+}
+
+.ta-alert-info {
+  @apply border-sky-200 bg-sky-50 text-sky-900;
+}
+
+.ta-alert-success {
+  @apply border-emerald-200 bg-emerald-50 text-emerald-800;
+}
+
+.ta-alert-error {
+  @apply border-rose-200 bg-rose-50 text-rose-800;
+}
+
+.ta-alert-warning {
+  @apply border-amber-200 bg-amber-50 text-amber-900;
+}
+
+.ta-field-error {
+  @apply text-xs font-medium text-rose-700;
+}
+
+.ta-input-error {
+  @apply border-rose-300 ring-1 ring-rose-200;
+}
+
+.ta-presentation-shell {
+  color: #fff;
+}
+
+.ta-presentation-slide {
+  @apply rounded-[2rem] border border-white/10 bg-white/5 shadow-[0_30px_80px_rgba(15,23,42,0.35)] backdrop-blur;
+}
+
+.ta-presentation-button,
+.ta-presentation-nav {
+  @apply inline-flex min-h-11 min-w-[7rem] items-center justify-center rounded-2xl bg-sky-400 px-5 text-sm font-semibold text-slate-950 transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.ta-presentation-button-secondary {
+  @apply inline-flex min-h-10 items-center justify-center rounded-2xl border border-white/20 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/15;
+}
+
+.ta-presentation-nav {
+  @apply min-w-[8rem];
+}
