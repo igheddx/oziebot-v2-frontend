@@ -1089,15 +1089,58 @@ export type InstructionalPackageArtifact = {
     objective_text?: string;
     daily_topic?: string;
     standard_set?: string;
+    objective_ids?: string[];
+    teks_ids?: string[];
+    alignment_summary?: string | null;
   } | null;
+  objective_ids?: string[];
+  teks_ids?: string[];
+  alignment_summary?: string | null;
   preview_html: string | null;
   download_url: string | null;
   export_available: boolean;
   additional_downloads?: ArtifactDownload[];
+  slide_visual_assets?: SlideVisualAsset[];
   qr_student_packet?: QrStudentPacket;
   content_json?: Record<string, unknown>;
   assignment_id?: string | null;
   google_form?: AssignmentGoogleForm | null;
+};
+
+export type SlideVisualRecommendation = {
+  visualType?: string;
+  title?: string;
+  description?: string;
+  educationalPurpose?: string;
+  suggestedPlacement?: string;
+  suggestedSources?: string[];
+  searchTerms?: string[];
+  sourceType?: string;
+  sourceUrl?: string | null;
+  attribution?: string | null;
+  promptHint?: string | null;
+  layoutTemplate?: string | null;
+  visualGenerationStatus?: string | null;
+};
+
+export type SlideVisualAsset = {
+  id: string;
+  slide_id: string;
+  visual_type: string;
+  title?: string | null;
+  description?: string | null;
+  source_type?: string | null;
+  source_url?: string | null;
+  attribution?: string | null;
+  local_asset_key?: string | null;
+  prompt_hint?: string | null;
+  educational_purpose?: string | null;
+  suggested_placement?: string | null;
+  layout_template?: string | null;
+  visual_generation_status?: string | null;
+  search_terms?: string[];
+  suggested_sources?: string[];
+  created_at?: string;
 };
 
 export type TeachingPresentationSlide = {
@@ -1110,6 +1153,8 @@ export type TeachingPresentationSlide = {
   subjectName?: string;
   layout?: string;
   visualType?: string;
+  visualRecommendation?: SlideVisualRecommendation | null;
+  objectiveText?: string;
 };
 
 export type ArchiveCheck = {

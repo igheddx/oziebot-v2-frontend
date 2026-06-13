@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   fetchV2AdminAiProviderConfig,
@@ -34,6 +34,10 @@ export function TeacherAssistV2AiSettingsScreen() {
   const [testPending, setTestPending] = useState(false);
   const [readiness, setReadiness] = useState<TeacherAiReadiness | null>(null);
 
+  const refreshReadiness = useCallback(() => {
+    return fetchV2TeacherAiReadiness().then(setReadiness);
+  }, []);
+
   useEffect(() => {
     void fetchV2AdminAiProviderConfig()
       .then((config) => {
@@ -44,8 +48,8 @@ export function TeacherAssistV2AiSettingsScreen() {
         setDailyCostLimitCents(String(config.daily_cost_limit_cents || 500));
       })
       .catch((nextError: Error) => setError(nextError.message));
-    void fetchV2TeacherAiReadiness().then(setReadiness).catch(() => undefined);
-  }, []);
+    void refreshReadiness().catch(() => undefined);
+  }, [refreshReadiness]);
 
   return (
     <div className="space-y-5">
@@ -226,8 +230,9 @@ export function TeacherAssistV2AiSettingsScreen() {
                     real_provider_model: realProviderModel || null,
                     daily_cost_limit_cents: Number.parseInt(dailyCostLimitCents, 10) || 0,
                   })
-                    .then((config) => {
+                    .then(async (config) => {
                       setAiConfig(config);
+                      await refreshReadiness();
                       setSaveMessage("AI settings saved.");
                     })
                     .catch((nextError: Error) => setError(nextError.message))

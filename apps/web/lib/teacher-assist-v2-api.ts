@@ -1,4 +1,4 @@
-import { authFetch, buildApiUrl, parseErrorMessage } from "@/lib/auth-service";
+import { authFetch, buildApiUrl, getStoredAccessToken, parseErrorMessage, refreshTokens } from "@/lib/auth-service";
 import type {
   AdminDashboard,
   ArchiveCheck,
@@ -585,6 +585,9 @@ export function saveV2GradebookGridCell(body: {
 
 export async function downloadV2GradebookGridCsv(subjectId: string, gradingPeriodId?: string | null) {
   const response = await authFetch(buildApiUrl(getV2GradebookGridExportUrl(subjectId, gradingPeriodId)));
+  if (!response) {
+    throw new Error("Unable to export gradebook right now.");
+  }
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response));
   }

@@ -87,7 +87,16 @@ export function TeachingModePresentation({
   }
 
   const layout = currentSlide.layout ?? "text_only";
-  const visualSide = layout === "text_left_visual_right" || layout === "visual_top_text_bottom" || layout === "two_column";
+  const visualSide =
+    layout === "text_left_visual_right" ||
+    layout === "visual_top_text_bottom" ||
+    layout === "two_column" ||
+    layout === "concept_map" ||
+    layout === "guided_practice" ||
+    layout === "independent_practice" ||
+    layout === "visual_left_text_right";
+  const showVisualOnTop = layout === "visual_top_text_bottom" || layout === "full_width_visual";
+  const visualType = currentSlide.visualType ?? currentSlide.visualRecommendation?.visualType;
 
   return (
     <div ref={containerRef} className="ta-presentation-shell min-h-dvh bg-gradient-to-br from-slate-950 via-slate-900 to-sky-950 text-white">
@@ -120,14 +129,17 @@ export function TeachingModePresentation({
                 <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-200">{currentSlide.subjectName}</p>
               ) : null}
               <p className="mt-3 text-xs uppercase tracking-[0.24em] text-white/50">{currentSlide.slideType.replaceAll("_", " ")}</p>
-              <h1 className="mt-4 text-3xl font-semibold leading-tight sm:text-5xl">{currentSlide.title}</h1>
-              {currentSlide.subtitle ? <p className="mt-3 text-xl text-white/75">{currentSlide.subtitle}</p> : null}
+              <h1 className="mt-4 text-5xl font-semibold leading-tight sm:text-6xl xl:text-7xl">{currentSlide.title}</h1>
+              {currentSlide.subtitle ? <p className="mt-4 text-2xl text-white/80 sm:text-3xl">{currentSlide.subtitle}</p> : null}
+              {currentSlide.objectiveText ? (
+                <p className="mt-4 text-lg text-sky-100/85 sm:text-2xl">Objective: {currentSlide.objectiveText}</p>
+              ) : null}
               <div className={visualSide ? "mt-8 grid gap-8 lg:grid-cols-2 lg:items-center" : "mt-8"}>
-                {layout === "visual_top_text_bottom" && currentSlide.visualType ? (
-                  <TeachingSlideVisual visualType={currentSlide.visualType} />
+                {showVisualOnTop && visualType ? (
+                  <TeachingSlideVisual visualType={visualType} />
                 ) : null}
                 {currentSlide.bullets.length > 0 ? (
-                  <ul className="space-y-4 text-lg leading-relaxed text-white/90 sm:text-2xl">
+                  <ul className="space-y-5 text-2xl leading-relaxed text-white/90 sm:text-3xl">
                     {currentSlide.bullets.map((bullet) => (
                       <li key={bullet} className="flex gap-3">
                         <span aria-hidden className="mt-3 h-2 w-2 shrink-0 rounded-full bg-sky-300" />
@@ -136,10 +148,22 @@ export function TeachingModePresentation({
                     ))}
                   </ul>
                 ) : null}
-                {layout !== "visual_top_text_bottom" && currentSlide.visualType ? (
-                  <TeachingSlideVisual visualType={currentSlide.visualType} />
+                {!showVisualOnTop && visualType ? (
+                  <TeachingSlideVisual visualType={visualType} />
                 ) : null}
               </div>
+              {currentSlide.visualRecommendation ? (
+                <div className="mt-8 rounded-2xl border border-sky-300/20 bg-white/5 p-5">
+                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-200">Visual support</p>
+                  <p className="mt-2 text-xl text-white sm:text-2xl">
+                    {(currentSlide.visualRecommendation.title || currentSlide.visualRecommendation.visualType || "Recommended visual")
+                      .replaceAll("_", " ")}
+                  </p>
+                  {currentSlide.visualRecommendation.description ? (
+                    <p className="mt-2 text-lg text-white/80 sm:text-xl">{currentSlide.visualRecommendation.description}</p>
+                  ) : null}
+                </div>
+              ) : null}
             </article>
           </main>
 

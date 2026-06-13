@@ -26,7 +26,40 @@ function slide(
     subjectName: partial.subjectName,
     layout: partial.layout,
     visualType: partial.visualType,
+    visualRecommendation: partial.visualRecommendation,
+    objectiveText: partial.objectiveText,
   };
+}
+
+function explicitSlidesFromContent(artifact: InstructionalPackageArtifact): TeachingPresentationSlide[] {
+  const content = artifact.content_json;
+  if (!content || typeof content !== "object" || !Array.isArray(content.slides)) {
+    return [];
+  }
+
+  return content.slides
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object"))
+    .map((entry, index) =>
+      slide(
+        {
+          id: typeof entry.id === "string" ? entry.id : undefined,
+          slideType: typeof entry.slideType === "string" ? entry.slideType : "content",
+          title: typeof entry.title === "string" ? entry.title : `Slide ${index + 1}`,
+          subtitle: typeof entry.subtitle === "string" ? entry.subtitle : undefined,
+          bullets: asBullets(entry.bullets),
+          teacherNotes: typeof entry.teacherNotes === "string" ? entry.teacherNotes : undefined,
+          subjectName: artifact.subject_name ?? undefined,
+          layout: typeof entry.layout === "string" ? entry.layout : undefined,
+          visualType: typeof entry.visualType === "string" ? entry.visualType : undefined,
+          visualRecommendation:
+            entry.visualRecommendation && typeof entry.visualRecommendation === "object"
+              ? (entry.visualRecommendation as TeachingPresentationSlide["visualRecommendation"])
+              : undefined,
+          objectiveText: artifact.objective_mapping?.objective_text,
+        },
+        index,
+      ),
+    );
 }
 
 function fallbackSlides(title: string): TeachingPresentationSlide[] {
@@ -48,6 +81,11 @@ export function sortDailyPlans<T extends { day_label: string | null }>(items: T[
 }
 
 export function dailyPlanArtifactToSlides(artifact: InstructionalPackageArtifact): TeachingPresentationSlide[] {
+  const explicitSlides = explicitSlidesFromContent(artifact);
+  if (explicitSlides.length > 0) {
+    return explicitSlides;
+  }
+
   const content = artifact.content_json;
   if (!content || typeof content !== "object") {
     return fallbackSlides(artifact.title);
@@ -80,6 +118,7 @@ export function dailyPlanArtifactToSlides(artifact: InstructionalPackageArtifact
           bullets: asBullets(subject.objective),
           teacherNotes: teacherActions.join("\n") || notes,
           subjectName,
+          objectiveText: artifact.objective_mapping?.objective_text,
         },
         index++,
       ),
@@ -94,6 +133,7 @@ export function dailyPlanArtifactToSlides(artifact: InstructionalPackageArtifact
             title: `${subjectName} — Vocabulary / materials`,
             bullets: materials,
             subjectName,
+            objectiveText: artifact.objective_mapping?.objective_text,
           },
           index++,
         ),
@@ -109,6 +149,7 @@ export function dailyPlanArtifactToSlides(artifact: InstructionalPackageArtifact
             bullets: teacherActions.slice(0, 2),
             teacherNotes: teacherActions.slice(2).join("\n"),
             subjectName,
+            objectiveText: artifact.objective_mapping?.objective_text,
           },
           index++,
         ),
@@ -123,6 +164,7 @@ export function dailyPlanArtifactToSlides(artifact: InstructionalPackageArtifact
           bullets: asBullets(subject.mini_lesson),
           teacherNotes: notes,
           subjectName,
+          objectiveText: artifact.objective_mapping?.objective_text,
         },
         index++,
       ),
@@ -137,6 +179,7 @@ export function dailyPlanArtifactToSlides(artifact: InstructionalPackageArtifact
             title: `${subjectName} — Guided practice`,
             bullets: studentActivity.slice(0, Math.max(1, Math.ceil(studentActivity.length / 2))),
             subjectName,
+            objectiveText: artifact.objective_mapping?.objective_text,
           },
           index++,
         ),
@@ -149,6 +192,7 @@ export function dailyPlanArtifactToSlides(artifact: InstructionalPackageArtifact
               title: `${subjectName} — Independent practice`,
               bullets: studentActivity.slice(Math.ceil(studentActivity.length / 2)),
               subjectName,
+              objectiveText: artifact.objective_mapping?.objective_text,
             },
             index++,
           ),
@@ -165,6 +209,7 @@ export function dailyPlanArtifactToSlides(artifact: InstructionalPackageArtifact
             title: `${subjectName} — Check for understanding`,
             bullets: assessment,
             subjectName,
+            objectiveText: artifact.objective_mapping?.objective_text,
           },
           index++,
         ),
@@ -176,6 +221,7 @@ export function dailyPlanArtifactToSlides(artifact: InstructionalPackageArtifact
             title: `${subjectName} — Exit ticket`,
             bullets: assessment,
             subjectName,
+            objectiveText: artifact.objective_mapping?.objective_text,
           },
           index++,
         ),
@@ -191,6 +237,7 @@ export function dailyPlanArtifactToSlides(artifact: InstructionalPackageArtifact
             bullets: [notes],
             teacherNotes: notes,
             subjectName,
+            objectiveText: artifact.objective_mapping?.objective_text,
           },
           index++,
         ),
@@ -202,17 +249,13 @@ export function dailyPlanArtifactToSlides(artifact: InstructionalPackageArtifact
 }
 
 export function subjectDeckArtifactToSlides(artifact: InstructionalPackageArtifact): TeachingPresentationSlide[] {
-  const content = artifact.content_json;
-  if (!content || typeof content !== "object") {
-    return fallbackSlides(artifact.title);
+  const explicitSlides = explicitSlidesFromContent(artifact);
+  if (explicitSlides.length === 0) {
+    const content = artifact.content_json;
+    return fallbackSlides(String((content && typeof content === "object" && content.title) || artifact.title));
   }
 
-  const rawSlides = (content.slides as Array<Record<string, unknown>> | undefined) ?? [];
-  if (rawSlides.length === 0) {
-    return fallbackSlides(String(content.title ?? artifact.title));
-  }
-
-  return rawSlides.map((entry, index) => {
+  return explicitSlides.map((entry, index) => {
     const title = String(entry.title ?? `Slide ${index + 1}`);
     const lower = title.toLowerCase();
     let slideType = "content";
@@ -227,14 +270,17 @@ export function subjectDeckArtifactToSlides(artifact: InstructionalPackageArtifa
 
     return slide(
       {
+        id: entry.id,
         slideType,
-        title,
-        subtitle: entry.subtitle ? String(entry.subtitle) : undefined,
-        bullets: asBullets(entry.bullets),
-        teacherNotes: entry.teacherNotes ? String(entry.teacherNotes) : undefined,
-        subjectName: artifact.subject_name ?? undefined,
-        layout: entry.layout ? String(entry.layout) : undefined,
-        visualType: entry.visualType ? String(entry.visualType) : undefined,
+        title: entry.title,
+        subtitle: entry.subtitle,
+        bullets: entry.bullets,
+        teacherNotes: entry.teacherNotes,
+        subjectName: entry.subjectName ?? artifact.subject_name ?? undefined,
+        layout: entry.layout,
+        visualType: entry.visualType,
+        visualRecommendation: entry.visualRecommendation,
+        objectiveText: artifact.objective_mapping?.objective_text,
       },
       index,
     );

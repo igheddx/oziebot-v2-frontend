@@ -89,8 +89,42 @@ function ArtifactReviewPanel({
 }) {
   if (!expanded) return null;
 
+  const visualAssets = artifact.slide_visual_assets ?? [];
+  const alignmentLine =
+    artifact.alignment_summary ?? artifact.objective_mapping?.alignment_summary ?? objectiveLine(artifact);
+
   return (
     <div className="border-t border-slate-100 px-4 py-3">
+      {alignmentLine ? (
+        <div className="mb-3 rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-900">
+          <span className="font-semibold">Aligned to:</span> {alignmentLine}
+        </div>
+      ) : null}
+      {visualAssets.length > 0 ? (
+        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Visual recommendations</p>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            {visualAssets.map((asset) => (
+              <div key={asset.id} className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700">
+                <p className="font-medium text-slate-900">
+                  {(asset.title || asset.visual_type || "Visual").replaceAll("_", " ")}
+                </p>
+                {asset.description ? <p className="mt-1">{asset.description}</p> : null}
+                <p className="mt-2 text-slate-600">
+                  Layout: {asset.layout_template?.replaceAll("_", " ") || "Recommended"} · Placement:{" "}
+                  {asset.suggested_placement || "Auto"}
+                </p>
+                {(asset.search_terms ?? []).length > 0 ? (
+                  <p className="mt-1 text-slate-600">Search terms: {asset.search_terms?.join(", ")}</p>
+                ) : null}
+                {(asset.suggested_sources ?? []).length > 0 ? (
+                  <p className="mt-1 text-slate-600">Sources: {asset.suggested_sources?.join(", ")}</p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {artifact.preview_html ? (
         <iframe
           title={artifact.title}
@@ -124,9 +158,12 @@ function dailyPlanTopic(artifact: InstructionalPackageArtifact): string | null {
 }
 
 function weeklyStandardLine(artifact: InstructionalPackageArtifact): string | null {
+  const codes = artifact.teks_ids?.length ? artifact.teks_ids : artifact.objective_mapping?.teks_ids;
+  if (codes && codes.length > 0) {
+    return `Standards: ${codes.join(", ")}`;
+  }
   const code = artifact.objective_mapping?.objective_code;
-  if (!code) return null;
-  return `Standard: ${code}`;
+  return code ? `Standard: ${code}` : null;
 }
 
 function openPrintableHtml(html: string) {
@@ -270,6 +307,9 @@ function DailyTeachingPlanItem({
             {objectiveLine(artifact) ? (
               <p className="mt-1 text-xs text-slate-600">Objective: {objectiveLine(artifact)}</p>
             ) : null}
+            {artifact.alignment_summary ? (
+              <p className="mt-1 text-xs text-slate-600">Aligned to: {artifact.alignment_summary}</p>
+            ) : null}
             {weeklyStandardLine(artifact) ? (
               <p className="mt-1 text-xs text-slate-500">{weeklyStandardLine(artifact)}</p>
             ) : null}
@@ -324,6 +364,9 @@ function SubjectSlideDeckItem({
             {artifact.description ? <p className="mt-1 text-xs text-slate-600">{artifact.description}</p> : null}
             {objectiveLine(artifact) ? (
               <p className="mt-1 text-xs text-slate-500">Objective: {objectiveLine(artifact)}</p>
+            ) : null}
+            {artifact.alignment_summary ? (
+              <p className="mt-1 text-xs text-slate-500">Aligned to: {artifact.alignment_summary}</p>
             ) : null}
           </div>
           <span
