@@ -162,7 +162,7 @@ function ArtifactCard({ artifact }: { artifact: RecoveryArtifact }) {
         </p>
       )}
 
-      {expanded && artifact.content && (
+      {expanded && artifact.content != null && (
         <div className="mt-2 space-y-1.5">
           {Object.entries(artifact.content).map(([key, value]) => {
             if (key === "injection_metadata" || key === "completion_tracking") return null;
@@ -358,7 +358,7 @@ function RecoveryQueueItemCard({
       )}
 
       {/* Recovery goal from success criteria */}
-      {item.success_criteria && (item.success_criteria as Record<string, unknown>).specific_gap_to_close && (
+      {item.success_criteria != null && !!(item.success_criteria as Record<string, unknown>).specific_gap_to_close && (
         <p className="mt-1 text-xs text-slate-500">
           <span className="font-medium">Recovery goal:</span>{" "}
           {String((item.success_criteria as Record<string, unknown>).specific_gap_to_close)}

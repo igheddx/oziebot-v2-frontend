@@ -20,8 +20,7 @@ export const TEACHER_ASSIST_V2_ROOT_ADMIN_NAV: TeacherAssistV2NavItem[] = [
 ];
 
 export const TEACHER_ASSIST_V2_TEACHER_NAV: TeacherAssistV2NavItem[] = [
-  { href: "/teacher-assist-v2/home", label: "Home" },
-  { href: "/teacher-assist-v2/pacing-guide-setup", label: "Pacing Guides" },
+  { href: "/teacher-assist-v2/today", label: "Today" },
   { href: "/teacher-assist-v2/planning", label: "Planning" },
   { href: "/teacher-assist-v2/packages", label: "Packages" },
   { href: "/teacher-assist-v2/assignments", label: "Assignments" },

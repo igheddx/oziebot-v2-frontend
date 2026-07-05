@@ -30,7 +30,7 @@ function useAuthImageSrc(apiPath: string | null): {
     setState({ src: null, loading: true, error: false });
     authFetch(apiPath)
       .then(res => {
-        if (!res.ok) throw new Error(`${res.status}`);
+        if (!res || !res.ok) throw new Error(`${res?.status ?? "request failed"}`);
         return res.blob();
       })
       .then(blob => {

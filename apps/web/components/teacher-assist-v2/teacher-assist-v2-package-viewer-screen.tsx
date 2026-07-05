@@ -1013,7 +1013,7 @@ export function TeacherAssistV2PackageViewerScreen({ packageId: packageIdProp }:
                   {usage.used_documents.length > 0 ? (
                     <ul className="mt-1 space-y-1">
                       {usage.used_documents.map((doc, i) => (
-                        <li key={`${group}-used-${doc.id ?? doc.title}-${i}`} className="rounded-md bg-emerald-50 px-2 py-1">
+                        <li key={`${group}-used-${doc.title}-${i}`} className="rounded-md bg-emerald-50 px-2 py-1">
                           {doc.title}
                         </li>
                       ))}
@@ -1024,7 +1024,7 @@ export function TeacherAssistV2PackageViewerScreen({ packageId: packageIdProp }:
                   {usage.skipped_documents.length > 0 ? (
                     <ul className="mt-1 space-y-1">
                       {usage.skipped_documents.map((doc, i) => (
-                        <li key={`${group}-skipped-${doc.id ?? doc.title}-${i}`} className="rounded-md bg-amber-50 px-2 py-1 text-amber-900">
+                        <li key={`${group}-skipped-${doc.title}-${i}`} className="rounded-md bg-amber-50 px-2 py-1 text-amber-900">
                           {doc.title}: {doc.reason}
                         </li>
                       ))}

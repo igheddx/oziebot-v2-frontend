@@ -597,12 +597,14 @@ type Props = {
   onArtifactClick?: (artifactId: string) => void;
   onGradeClick?: (assignmentId: string) => void;
   onRecoveryClick?: (queueItemId: string) => void;
+  onDataLoaded?: (data: TodayClassroom) => void;
 };
 
 export function TeacherAssistV2TodayScreen({
   onArtifactClick,
   onGradeClick,
   onRecoveryClick,
+  onDataLoaded,
 }: Props) {
   const [data, setData] = useState<TodayClassroom | null>(null);
   const [loading, setLoading] = useState(true);
@@ -614,12 +616,13 @@ export function TeacherAssistV2TodayScreen({
     try {
       const result = await fetchV2TodayClassroom();
       setData(result);
+      onDataLoaded?.(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load Today workspace.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onDataLoaded]);
 
   useEffect(() => {
     load();
