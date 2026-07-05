@@ -8,17 +8,33 @@ import type { TodayClassroom } from "@/lib/teacher-assist-v2-types";
 
 export default function TeacherAssistV2TodayPage() {
   const router = useRouter();
-  // Built from loaded data so artifact clicks can resolve to a package.
+  // Built from loaded data so artifact/recovery clicks can resolve to a package/assignment.
   const artifactPackageMapRef = useRef<Map<string, string>>(new Map());
+  const recoveryAssignmentMapRef = useRef<Map<string, string>>(new Map());
 
   const handleDataLoaded = useCallback((data: TodayClassroom) => {
-    const map = new Map<string, string>();
+    const artifactMap = new Map<string, string>();
     for (const subject of data.subjects_today) {
       for (const ref of Object.values(subject.artifacts)) {
-        map.set(ref.artifact_id, subject.package_id);
+        artifactMap.set(ref.artifact_id, subject.package_id);
       }
     }
-    artifactPackageMapRef.current = map;
+    artifactPackageMapRef.current = artifactMap;
+
+    const recoveryMap = new Map<string, string>();
+    for (const item of data.recovery_today) {
+      if (item.assignment_id) {
+        recoveryMap.set(item.queue_item_id, item.assignment_id);
+      }
+    }
+    for (const subject of data.subjects_today) {
+      for (const item of subject.recovery_items) {
+        if (item.assignment_id) {
+          recoveryMap.set(item.queue_item_id, item.assignment_id);
+        }
+      }
+    }
+    recoveryAssignmentMapRef.current = recoveryMap;
   }, []);
 
   const handleArtifactClick = useCallback(
@@ -41,8 +57,13 @@ export default function TeacherAssistV2TodayPage() {
   );
 
   const handleRecoveryClick = useCallback(
-    (_queueItemId: string) => {
-      router.push("/teacher-assist-v2/assignments");
+    (queueItemId: string) => {
+      const assignmentId = recoveryAssignmentMapRef.current.get(queueItemId);
+      if (assignmentId) {
+        router.push(`/teacher-assist-v2/assignments/view?id=${encodeURIComponent(assignmentId)}`);
+      } else {
+        router.push("/teacher-assist-v2/assignments");
+      }
     },
     [router],
   );

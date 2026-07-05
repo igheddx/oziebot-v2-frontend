@@ -1579,6 +1579,7 @@ export type TodayTimeline = {
 export type TodayRecoveryItem = {
   queue_item_id: string;
   package_id: string | null;
+  assignment_id: string | null;
   objective_code: string | null;
   priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   recommendation_type: string;
