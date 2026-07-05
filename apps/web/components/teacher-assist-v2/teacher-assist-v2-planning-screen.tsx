@@ -40,14 +40,14 @@ type StepAlert = { tone: "success" | "error"; message: string } | null;
 
 export function TeacherAssistV2PlanningScreen() {
   const router = useRouter();
-  const { context } = useTeacherAssistV2();
+  const { context, setProcessingIndicator } = useTeacherAssistV2();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<PlanningForm | null>(null);
   const [weekStart, setWeekStart] = useState(1);
   const [weekEnd, setWeekEnd] = useState(1);
   const [review, setReview] = useState<PlanningReview | null>(null);
   const [teachingOrder, setTeachingOrder] = useState<string[]>([]);
-  const [optionalOutputs, setOptionalOutputs] = useState<string[]>(["quiz", "parent_newsletter_summary"]);
+  const [optionalOutputs, setOptionalOutputs] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [alert, setAlert] = useState<StepAlert>(null);
   const [generating, setGenerating] = useState(false);
@@ -97,9 +97,11 @@ export function TeacherAssistV2PlanningScreen() {
       .then((payload) => {
         setForm(payload);
         setTeachingOrder(payload.default_teaching_order);
-        if (payload.week_ranges[0]) {
-          setWeekStart(payload.week_ranges[0].week_start);
-          setWeekEnd(payload.week_ranges[0].week_end);
+        setOptionalOutputs(payload.recommended_outputs ?? ["quiz", "parent_newsletter_summary"]);
+        const defaultRange = payload.week_ranges[payload.week_ranges.length - 1] ?? payload.week_ranges[0];
+        if (defaultRange) {
+          setWeekStart(defaultRange.week_start);
+          setWeekEnd(defaultRange.week_end);
         }
         setPlanStartDate(payload.default_plan_start_date);
         setPlanEndDate(payload.default_plan_end_date);
@@ -231,7 +233,12 @@ export function TeacherAssistV2PlanningScreen() {
         plan_end_date: planEndDate,
         excluded_pacing_material_ids: excludedPacingMaterialIds,
       });
-      router.push(`/teacher-assist-v2/packages/view?id=${encodeURIComponent(payload.id)}`);
+      setProcessingIndicator({
+        kind: "package",
+        targetId: payload.id,
+        label: "Instructional package processing",
+      });
+      router.push(`/teacher-assist-v2/packages/view?id=${encodeURIComponent(payload.id)}&pending=1`);
     } catch (error) {
       setAlert({
         tone: "error",
@@ -518,26 +525,37 @@ export function TeacherAssistV2PlanningScreen() {
           </div>
           <div>
             <p className="text-sm font-medium text-slate-700">Optional outputs</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Pre-selected outputs are recommended based on your pacing guide objectives and subject. You can adjust before generating.
+            </p>
             {optionalOutputs.includes("writing_response") ? (
               <p className="mt-1 text-xs text-slate-500">
                 A rubric for each writing response will be generated automatically and can be edited after generation.
               </p>
             ) : null}
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              {OPTIONAL_OUTPUTS.map((output) => (
-                <label key={output.id} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={optionalOutputs.includes(output.id)}
-                    onChange={(event) => {
-                      setOptionalOutputs((current) =>
-                        event.target.checked ? [...current, output.id] : current.filter((value) => value !== output.id),
-                      );
-                    }}
-                  />
-                  {output.label}
-                </label>
-              ))}
+              {OPTIONAL_OUTPUTS.map((output) => {
+                const isRecommended = form.recommended_outputs?.includes(output.id);
+                return (
+                  <label key={output.id} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={optionalOutputs.includes(output.id)}
+                      onChange={(event) => {
+                        setOptionalOutputs((current) =>
+                          event.target.checked ? [...current, output.id] : current.filter((value) => value !== output.id),
+                        );
+                      }}
+                    />
+                    <span className="flex-1">{output.label}</span>
+                    {isRecommended ? (
+                      <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-700">
+                        Recommended
+                      </span>
+                    ) : null}
+                  </label>
+                );
+              })}
             </div>
           </div>
           {review?.ai_readiness_summary ? (
@@ -576,7 +594,7 @@ export function TeacherAssistV2PlanningScreen() {
               disabled={generating}
               onClick={() => void generatePackage()}
             >
-              {generating ? "Generating..." : "Generate Instructional Package"}
+              {generating ? "Starting..." : "Generate Instructional Package"}
             </button>
           </div>
         </section>

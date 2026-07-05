@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useTeacherAssistV2 } from "@/components/teacher-assist-v2/teacher-assist-v2-context";
 import { closeOutV2InstructionalPackage, fetchV2InstructionalPackage } from "@/lib/teacher-assist-v2-api";
 import { resolveTeacherAssistFileUrl } from "@/lib/auth-service";
 import { sortDailyPlans } from "@/lib/teaching-mode-slides";
@@ -42,6 +43,8 @@ const SLIDE_DECK_PPTX_NOTE =
 
 const STATUS_STYLES: Record<string, string> = {
   active: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  processing: "border-violet-200 bg-violet-50 text-violet-800",
+  failed: "border-rose-200 bg-rose-50 text-rose-800",
   generated: "border-sky-200 bg-sky-50 text-sky-800",
   ending_soon: "border-amber-200 bg-amber-50 text-amber-900",
   expired: "border-rose-200 bg-rose-50 text-rose-800",
@@ -78,6 +81,14 @@ function dailyPresentHref(packageId: string, dayLabel: string | null): string {
 
 function subjectPresentHref(packageId: string, artifactId: string): string {
   return `/teacher-assist-v2/teach?packageId=${packageId}&mode=subject&artifactId=${artifactId}&start=1`;
+}
+
+function studentDailyPresentHref(packageId: string, dayLabel: string | null): string {
+  return `/teacher-assist-v2/teach?packageId=${packageId}&mode=student_daily&day=${encodeURIComponent(dayLabel ?? "")}&start=1`;
+}
+
+function studentSubjectPresentHref(packageId: string, artifactId: string): string {
+  return `/teacher-assist-v2/teach?packageId=${packageId}&mode=student_subject&artifactId=${artifactId}&start=1`;
 }
 
 function ArtifactReviewPanel({
@@ -180,6 +191,7 @@ function ArtifactActions({
   expanded,
   onReview,
   presentHref,
+  studentPresentHref,
   reviewLabel,
   footerNote,
   qrPacketHref,
@@ -188,6 +200,7 @@ function ArtifactActions({
   expanded: boolean;
   onReview: () => void;
   presentHref?: string;
+  studentPresentHref?: string;
   reviewLabel?: string;
   footerNote?: string;
   qrPacketHref?: string | null;
@@ -224,7 +237,15 @@ function ArtifactActions({
         ) : null}
         {presentHref ? (
           <Link href={presentHref} className="ta-button-primary inline-flex h-8 items-center px-3 text-xs">
-            Present
+            Present (Teacher)
+          </Link>
+        ) : null}
+        {studentPresentHref ? (
+          <Link
+            href={studentPresentHref}
+            className="inline-flex h-8 items-center rounded-xl bg-violet-600 px-3 text-xs font-semibold text-white hover:bg-violet-700"
+          >
+            Present to Students
           </Link>
         ) : null}
         {artifact.preview_html ? (
@@ -279,16 +300,19 @@ function ArtifactActions({
 function DailyTeachingPlanItem({
   artifact,
   packageId,
+  studentLessonDecks,
   expandedArtifactId,
   setExpandedArtifactId,
 }: {
   artifact: InstructionalPackageArtifact;
   packageId: string;
+  studentLessonDecks: InstructionalPackageArtifact[];
   expandedArtifactId: string | null;
   setExpandedArtifactId: (id: string | null) => void;
 }) {
   const expanded = expandedArtifactId === artifact.id;
   const subjects = dailyPlanSubjects(artifact);
+  const studentDeck = studentLessonDecks.find((d) => d.day_label === artifact.day_label && Boolean(d.day_label));
 
   return (
     <li className="rounded-xl border border-slate-200 bg-white">
@@ -327,8 +351,14 @@ function DailyTeachingPlanItem({
         artifact={artifact}
         expanded={expanded}
         presentHref={dailyPresentHref(packageId, artifact.day_label)}
+        studentPresentHref={artifact.day_label ? studentDailyPresentHref(packageId, artifact.day_label) : undefined}
         onReview={() => setExpandedArtifactId(expanded ? null : artifact.id)}
       />
+      {studentDeck ? null : (
+        <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500">
+          Student lesson deck not yet generated for this day.
+        </p>
+      )}
       <ArtifactReviewPanel artifact={artifact} expanded={expanded} />
     </li>
   );
@@ -339,6 +369,7 @@ function SubjectSlideDeckItem({
   packageId,
   weekStart,
   weekEnd,
+  studentLessonDecks,
   expandedArtifactId,
   setExpandedArtifactId,
 }: {
@@ -346,10 +377,12 @@ function SubjectSlideDeckItem({
   packageId: string;
   weekStart: number;
   weekEnd: number;
+  studentLessonDecks: InstructionalPackageArtifact[];
   expandedArtifactId: string | null;
   setExpandedArtifactId: (id: string | null) => void;
 }) {
   const expanded = expandedArtifactId === artifact.id;
+  const studentDeck = studentLessonDecks.find((d) => d.subject_id === artifact.subject_id && !d.day_label);
 
   return (
     <li className="rounded-xl border border-slate-200 bg-white">
@@ -382,9 +415,15 @@ function SubjectSlideDeckItem({
         artifact={artifact}
         expanded={expanded}
         presentHref={subjectPresentHref(packageId, artifact.id)}
+        studentPresentHref={studentDeck ? studentSubjectPresentHref(packageId, studentDeck.id) : undefined}
         footerNote={SLIDE_DECK_PPTX_NOTE}
         onReview={() => setExpandedArtifactId(expanded ? null : artifact.id)}
       />
+      {!studentDeck ? (
+        <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500">
+          Student lesson deck not yet generated for this subject.
+        </p>
+      ) : null}
       <ArtifactReviewPanel artifact={artifact} expanded={expanded} />
     </li>
   );
@@ -706,8 +745,8 @@ function SupportingMaterialsSection({ detail }: { detail: InstructionalPackageDe
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">District resources</h3>
           <ul className="mt-2 space-y-2">
-            {detail.district_materials.map((item) => (
-              <li key={item.id} className="rounded-lg border border-slate-200 px-3 py-2">
+            {detail.district_materials.map((item, i) => (
+              <li key={`${item.id}-${i}`} className="rounded-lg border border-slate-200 px-3 py-2">
                 <p className="font-medium text-slate-900">{item.title}</p>
                 <p className="text-xs text-slate-500">
                   {item.material_kind} · {item.resource_type.replaceAll("_", " ")}
@@ -754,7 +793,9 @@ function SupportingMaterialsSection({ detail }: { detail: InstructionalPackageDe
 
 export function TeacherAssistV2PackageViewerScreen({ packageId: packageIdProp }: { packageId?: string } = {}) {
   const searchParams = useSearchParams();
+  const { setProcessingIndicator, clearProcessingIndicator } = useTeacherAssistV2();
   const packageId = packageIdProp ?? searchParams.get("id") ?? "";
+  const showPendingConfirmation = searchParams.get("pending") === "1";
   const [detail, setDetail] = useState<InstructionalPackageDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -765,8 +806,10 @@ export function TeacherAssistV2PackageViewerScreen({ packageId: packageIdProp }:
   const [confirmReviewed, setConfirmReviewed] = useState(false);
   const [confirmTeachingDone, setConfirmTeachingDone] = useState(false);
 
-  const refresh = async () => {
-    setLoading(true);
+  const refresh = useCallback(async () => {
+    if (!detail) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const next = await fetchV2InstructionalPackage(packageId);
@@ -774,20 +817,44 @@ export function TeacherAssistV2PackageViewerScreen({ packageId: packageIdProp }:
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Package not found.");
     } finally {
-      setLoading(false);
+      if (!detail) {
+        setLoading(false);
+      }
     }
-  };
+  }, [detail, packageId]);
 
   useEffect(() => {
     if (!packageId) return;
     void refresh();
-  }, [packageId]);
+  }, [packageId, refresh]);
+
+  useEffect(() => {
+    if (detail?.status !== "processing") return;
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [detail?.status, refresh]);
+
+  useEffect(() => {
+    if (!detail) return;
+    if (detail.status === "processing") {
+      setProcessingIndicator({
+        kind: "package",
+        targetId: detail.id,
+        label: "Instructional package processing",
+      });
+      return;
+    }
+    clearProcessingIndicator(detail.id);
+  }, [clearProcessingIndicator, detail, setProcessingIndicator]);
 
   const dailyTeachingPlans = useMemo(
     () => sortDailyPlans(detail?.artifact_groups.daily_teaching_plans ?? []),
     [detail],
   );
   const subjectSlideDecks = detail?.artifact_groups.subject_slide_decks ?? [];
+  const studentLessonDecks = detail?.artifact_groups.student_lesson_decks ?? [];
   const assessmentArtifacts = useMemo(
     () => detail?.artifact_groups.assessments ?? [],
     [detail],
@@ -854,7 +921,17 @@ export function TeacherAssistV2PackageViewerScreen({ packageId: packageIdProp }:
     );
   }
 
-  if (loading) return <p className="text-sm text-slate-600">Loading instructional package...</p>;
+  if (loading) {
+    if (showPendingConfirmation) {
+      return (
+        <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-4 text-sm text-violet-900">
+          <p className="font-semibold text-slate-900">Your instructional package is being processed.</p>
+          <p className="mt-1">It will be available soon. You can keep using TeacherAssist while it finishes.</p>
+        </div>
+      );
+    }
+    return <p className="text-sm text-slate-600">Loading instructional package...</p>;
+  }
   if (!detail) {
     return (
       <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
@@ -864,6 +941,7 @@ export function TeacherAssistV2PackageViewerScreen({ packageId: packageIdProp }:
   }
 
   const weekLabel = weekRangeLabel(detail.week_start, detail.week_end);
+  const packageProcessing = detail.status === "processing";
 
   return (
     <div className="max-w-4xl space-y-4 text-left">
@@ -888,7 +966,15 @@ export function TeacherAssistV2PackageViewerScreen({ packageId: packageIdProp }:
       </header>
 
       {detail.status_message ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        <div
+          className={`rounded-xl px-3 py-2 text-sm ${
+            packageProcessing
+              ? "border border-violet-200 bg-violet-50 text-violet-900"
+              : detail.status === "failed"
+                ? "border border-rose-200 bg-rose-50 text-rose-800"
+                : "border border-amber-200 bg-amber-50 text-amber-900"
+          }`}
+        >
           {detail.status_message}
         </div>
       ) : null}
@@ -926,8 +1012,8 @@ export function TeacherAssistV2PackageViewerScreen({ packageId: packageIdProp }:
                   <p className="font-semibold capitalize text-slate-800">{group} documents</p>
                   {usage.used_documents.length > 0 ? (
                     <ul className="mt-1 space-y-1">
-                      {usage.used_documents.map((doc) => (
-                        <li key={`${group}-used-${doc.title}`} className="rounded-md bg-emerald-50 px-2 py-1">
+                      {usage.used_documents.map((doc, i) => (
+                        <li key={`${group}-used-${doc.id ?? doc.title}-${i}`} className="rounded-md bg-emerald-50 px-2 py-1">
                           {doc.title}
                         </li>
                       ))}
@@ -937,8 +1023,8 @@ export function TeacherAssistV2PackageViewerScreen({ packageId: packageIdProp }:
                   )}
                   {usage.skipped_documents.length > 0 ? (
                     <ul className="mt-1 space-y-1">
-                      {usage.skipped_documents.map((doc) => (
-                        <li key={`${group}-skipped-${doc.title}`} className="rounded-md bg-amber-50 px-2 py-1 text-amber-900">
+                      {usage.skipped_documents.map((doc, i) => (
+                        <li key={`${group}-skipped-${doc.id ?? doc.title}-${i}`} className="rounded-md bg-amber-50 px-2 py-1 text-amber-900">
                           {doc.title}: {doc.reason}
                         </li>
                       ))}
@@ -977,6 +1063,7 @@ export function TeacherAssistV2PackageViewerScreen({ packageId: packageIdProp }:
                     key={artifact.id}
                     artifact={artifact}
                     packageId={detail.id}
+                    studentLessonDecks={studentLessonDecks}
                     expandedArtifactId={expandedArtifactId}
                     setExpandedArtifactId={setExpandedArtifactId}
                   />
@@ -1003,6 +1090,7 @@ export function TeacherAssistV2PackageViewerScreen({ packageId: packageIdProp }:
                     packageId={detail.id}
                     weekStart={detail.week_start}
                     weekEnd={detail.week_end}
+                    studentLessonDecks={studentLessonDecks}
                     expandedArtifactId={expandedArtifactId}
                     setExpandedArtifactId={setExpandedArtifactId}
                   />
@@ -1022,9 +1110,15 @@ export function TeacherAssistV2PackageViewerScreen({ packageId: packageIdProp }:
           <p className="mt-1 text-xs text-slate-600">
             Writing responses include their grading rubric in the same card — preview, edit, and print both together.
           </p>
-          {detail.can_close_out ? (
-            <TeacherAssistV2AddAssignmentPanel packageId={detail.id} onGenerated={refresh} />
-          ) : null}
+          {detail.can_close_out && (
+            packageProcessing ? (
+              <div className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-3 text-sm text-violet-900">
+                Additional assignments unlock after this package finishes generating.
+              </div>
+            ) : (
+              <TeacherAssistV2AddAssignmentPanel packageId={detail.id} onGenerated={refresh} />
+            )
+          )}
           <ul className="mt-3 space-y-2">
             {quizArtifacts.map((artifact) => (
               <QuizArtifactCard

@@ -50,6 +50,13 @@ import type {
   MasteryEvidenceRow,
   TeacherOnboardingForm,
   TeacherProvisionResult,
+  ClassInsight,
+  StudentFacingFeedback,
+  RecoveryQueueItem,
+  RecoveryBudget,
+  RecoveryDecision,
+  RecoveryArtifact,
+  TodayClassroom,
 } from "@/lib/teacher-assist-v2-types";
 
 export class ApiFieldErrors extends Error {
@@ -773,6 +780,25 @@ export function fetchV2InstructionalPackage(packageId: string) {
   return readJson<InstructionalPackageDetail>(`/v1/teacher-assist-v2/teacher/planning/packages/${packageId}`);
 }
 
+/** Safe variant for background polling — never clears the session on 401. */
+export async function pollV2PackageStatus(packageId: string): Promise<string | null> {
+  const res = await authFetch(
+    `/v1/teacher-assist-v2/teacher/planning/packages/${packageId}`,
+    {},
+    { clearSessionOn401: false },
+  );
+  if (!res || !res.ok) return null;
+  const data = (await res.json()) as InstructionalPackageDetail;
+  return data.status ?? null;
+}
+
+export function triggerArtifactImageFetch(artifactId: string) {
+  return writeJson<{ fetched: number; pending: number; failed: number; total: number; message: string }>(
+    `/v1/teacher-assist-v2/teacher/artifacts/${artifactId}/fetch-images`,
+    "POST",
+  );
+}
+
 export function fetchV2AdminGoogleSettings() {
   return readJson<AdminGoogleSettings>("/v1/teacher-assist-v2/admin/google-settings");
 }
@@ -845,6 +871,18 @@ export function fetchV2Assignments(filters?: { status?: string; assignment_type?
 
 export function fetchV2Assignment(assignmentId: string) {
   return readJson<AssignmentDetail>(`/v1/teacher-assist-v2/teacher/assignments/${assignmentId}`);
+}
+
+/** Safe variant for background polling — never clears the session on 401. */
+export async function pollV2AssignmentGradingCount(assignmentId: string): Promise<number | null> {
+  const res = await authFetch(
+    `/v1/teacher-assist-v2/teacher/assignments/${assignmentId}`,
+    {},
+    { clearSessionOn401: false },
+  );
+  if (!res || !res.ok) return null;
+  const data = (await res.json()) as AssignmentDetail;
+  return data.grading_activity?.processing_count ?? 0;
 }
 
 export function fetchV2ManualAssignmentForm() {
@@ -1012,6 +1050,7 @@ export function acceptV2SubmissionGrade(
     max_score?: number;
     teacher_comment?: string;
     rubric_json?: GradingDraft["rubric_json"];
+    student_facing_feedback?: StudentFacingFeedback | null;
   },
 ) {
   return writeJson<AssignmentGrade>(
@@ -1071,6 +1110,7 @@ export function modifyV2SubmissionGrade(
     teacher_comment: string;
     rubric_json: GradingDraft["rubric_json"];
     teacher_override_reason: string;
+    student_facing_feedback?: StudentFacingFeedback | null;
   },
 ) {
   return writeJson<AssignmentGrade>(
@@ -1078,6 +1118,90 @@ export function modifyV2SubmissionGrade(
     "POST",
     body,
   );
+}
+
+export function fetchV2AssignmentClassInsight(assignmentId: string) {
+  return readJson<ClassInsight>(`/v1/teacher-assist-v2/teacher/assignments/${assignmentId}/class-insight`);
+}
+
+// ── Recovery Queue ──────────────────────────────────────────────────────────
+
+export function createV2RecoveryQueueItem(body: {
+  recommendation_type: string;
+  reason: string;
+  students_affected: number[];
+  assignment_id?: string | null;
+  instructional_package_id?: string | null;
+  education_objective_id?: string | null;
+  misconception_text?: string | null;
+  evidence_snapshot?: Record<string, unknown> | null;
+  mastery_snapshot?: Record<string, unknown> | null;
+  priority?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
+}) {
+  return writeJson<RecoveryQueueItem>(`/v1/teacher-assist-v2/teacher/recovery-queue`, "POST", body);
+}
+
+export function fetchV2RecoveryQueue(params?: {
+  assignment_id?: string;
+  instructional_package_id?: string;
+  status?: string;
+}) {
+  const query = new URLSearchParams();
+  if (params?.assignment_id) query.set("assignment_id", params.assignment_id);
+  if (params?.instructional_package_id) query.set("instructional_package_id", params.instructional_package_id);
+  if (params?.status) query.set("status", params.status);
+  const qs = query.toString();
+  return readJson<RecoveryQueueItem[]>(`/v1/teacher-assist-v2/teacher/recovery-queue${qs ? `?${qs}` : ""}`);
+}
+
+export function updateV2RecoveryQueueItem(
+  itemId: string,
+  body: {
+    teacher_response?: string | null;
+    teacher_notes?: string | null;
+    scheduled_for?: string | null;
+    priority?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
+    status?: string | null;
+    post_recovery_mastery_snapshot?: Record<string, unknown> | null;
+  },
+) {
+  return writeJson<RecoveryQueueItem>(
+    `/v1/teacher-assist-v2/teacher/recovery-queue/${itemId}`,
+    "PATCH",
+    body,
+  );
+}
+
+export function fetchV2RecoveryBudget(packageId: string) {
+  return readJson<RecoveryBudget>(`/v1/teacher-assist-v2/teacher/packages/${packageId}/recovery-budget`);
+}
+
+// ── Phase 8: Learning Recovery Planner ────────────────────────────────────────
+
+export function fetchV2RecoveryDecision(assignmentId: string) {
+  return readJson<RecoveryDecision>(
+    `/v1/teacher-assist-v2/teacher/assignments/${assignmentId}/recovery-decision`,
+  );
+}
+
+export function generateV2RecoveryArtifact(itemId: string, artifactType: string) {
+  return writeJson<RecoveryArtifact>(
+    `/v1/teacher-assist-v2/teacher/recovery-queue/${itemId}/artifacts`,
+    "POST",
+    { artifact_type: artifactType },
+  );
+}
+
+export function fetchV2RecoveryArtifacts(itemId: string) {
+  return readJson<RecoveryArtifact[]>(
+    `/v1/teacher-assist-v2/teacher/recovery-queue/${itemId}/artifacts`,
+  );
+}
+
+// ── Phase 9: Teacher Workspace — Today ────────────────────────────────────────
+
+export function fetchV2TodayClassroom() {
+  return readJson<TodayClassroom>("/v1/teacher-assist-v2/teacher/today");
 }
 
 export function rejectV2SubmissionGrade(

@@ -8,6 +8,8 @@ export type CatalogFieldConfig = {
   placeholder?: string;
   type?: "text" | "select";
   options?: Array<{ value: string; label: string }>;
+  /** Dynamic options that depend on other form values. Takes precedence over `options`. */
+  getOptions?: (form: Record<string, string>) => Array<{ value: string; label: string }>;
   required?: boolean;
 };
 
@@ -29,17 +31,20 @@ type CatalogCrudTableProps<T extends { id: string; active: boolean }> = {
 function FieldInput({
   field,
   value,
+  form,
   onChange,
 }: {
   field: CatalogFieldConfig;
   value: string;
+  form: Record<string, string>;
   onChange: (value: string) => void;
 }) {
   if (field.type === "select") {
+    const options = field.getOptions ? field.getOptions(form) : (field.options ?? []);
     return (
       <select className="ta-input h-9 text-sm" value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">Select...</option>
-        {(field.options ?? []).map((option) => (
+        {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>
@@ -134,6 +139,7 @@ export function CatalogCrudTable<T extends { id: string; active: boolean }>({
                 <FieldInput
                   field={field}
                   value={createForm[field.key] ?? ""}
+                  form={createForm}
                   onChange={(value) => setCreateForm((current) => ({ ...current, [field.key]: value }))}
                 />
               </label>
@@ -193,6 +199,7 @@ export function CatalogCrudTable<T extends { id: string; active: boolean }>({
                           <FieldInput
                             field={fields.find((field) => field.key === column.key)!}
                             value={editForms[row.id]?.[column.key] ?? ""}
+                            form={editForms[row.id] ?? {}}
                             onChange={(value) =>
                               setEditForms((current) => ({
                                 ...current,

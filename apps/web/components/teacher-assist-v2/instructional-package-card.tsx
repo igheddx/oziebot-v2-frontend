@@ -7,6 +7,8 @@ import type { InstructionalPackageSummary } from "@/lib/teacher-assist-v2-types"
 
 const STATUS_STYLES: Record<string, string> = {
   active: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  processing: "bg-violet-50 text-violet-800 border-violet-200",
+  failed: "bg-rose-50 text-rose-800 border-rose-200",
   generated: "bg-sky-50 text-sky-800 border-sky-200",
   ending_soon: "bg-amber-50 text-amber-900 border-amber-200",
   expired: "bg-rose-50 text-rose-800 border-rose-200",

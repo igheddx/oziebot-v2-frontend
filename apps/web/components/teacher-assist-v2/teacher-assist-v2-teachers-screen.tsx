@@ -83,7 +83,18 @@ export function TeacherAssistV2TeachersScreen() {
       ) : null}
       {temporaryPassword ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Temporary password (shown once): <span className="font-mono font-semibold">{temporaryPassword}</span>
+          <p className="font-semibold">Temporary password (shown once — share this with the teacher):</p>
+          <div className="mt-1 flex items-center gap-2">
+            <span className="font-mono text-base font-bold tracking-wide">{temporaryPassword}</span>
+            <button
+              type="button"
+              className="rounded-lg border border-amber-400 bg-white px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-50"
+              onClick={() => void navigator.clipboard.writeText(temporaryPassword)}
+            >
+              Copy
+            </button>
+          </div>
+          <p className="mt-1 text-xs">The teacher will be asked to set a new password on first login.</p>
         </div>
       ) : null}
       {error ? (
@@ -159,7 +170,11 @@ export function TeacherAssistV2TeachersScreen() {
               catalog_grade_id: gradeId || undefined,
             })
               .then(async (result) => {
-                setMessage(`Teacher account created for ${result.email}.`);
+                setMessage(
+                  result.created_user
+                    ? `Teacher account created for ${result.email}.`
+                    : `Teacher access updated for ${result.email}. A new temporary password has been issued.`,
+                );
                 if (result.temporary_password) setTemporaryPassword(result.temporary_password);
                 setEmail("");
                 setFullName("");

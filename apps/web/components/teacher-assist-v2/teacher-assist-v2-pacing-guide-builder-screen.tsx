@@ -26,26 +26,10 @@ import type {
   EducationStateRow,
   EducationSubjectRow,
   PacingGuideBuilderPayload,
-  PacingGuideDailyPlan,
   PacingGuideDetail,
 } from "@/lib/teacher-assist-v2-types";
 
-const STEPS = ["Scope", "Objectives", "Weekly/Daily Plan", "Resources & Links", "Review & Save"] as const;
-const DEFAULT_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-
-function emptyDailyPlans(): PacingGuideDailyPlan[] {
-  return DEFAULT_DAYS.map((day_label) => ({ day_label, daily_topic: "" }));
-}
-
-function defaultWeek(sequence: number) {
-  return {
-    title: `Week ${sequence}`,
-    description: "",
-    sequence_number: sequence,
-    unit_title: "",
-    daily_plans: emptyDailyPlans(),
-  };
-}
+const STEPS = ["Scope", "Objectives", "Duration", "Supporting Documents", "Review & Save"] as const;
 
 export function TeacherAssistV2PacingGuideBuilderScreen() {
   const searchParams = useSearchParams();
@@ -75,53 +59,8 @@ export function TeacherAssistV2PacingGuideBuilderScreen() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [unitTitle, setUnitTitle] = useState("");
-  const [estimatedWeeks, setEstimatedWeeks] = useState("1");
-  const [startWeek, setStartWeek] = useState("1");
-  const [endWeek, setEndWeek] = useState("1");
+  const [estimatedWeeks, setEstimatedWeeks] = useState("6");
   const [selectedObjectiveIds, setSelectedObjectiveIds] = useState<string[]>([]);
-  const [weeks, setWeeks] = useState([defaultWeek(1)]);
-  const [savedPeriods, setSavedPeriods] = useState<
-    Array<{ id: string; title: string; sequence_number: number; days: Array<{ id: string; day_label: string }> }>
-  >([]);
-
-  const syncSavedPeriodsFromGuide = (guide: PacingGuideDetail) => {
-    setSavedPeriods(
-      guide.periods.map((period) => ({
-        id: period.id,
-        title: period.title,
-        sequence_number: period.sequence_number,
-        days: (period.daily_plans ?? [])
-          .filter((day) => day.id)
-          .map((day) => ({ id: day.id as string, day_label: day.day_label })),
-      })),
-    );
-  };
-
-  const resolveSavedDayId = (weekIndex: number, dayLabel: string): string | null => {
-    const period = savedPeriods[weekIndex];
-    if (!period) return null;
-    return period.days.find((day) => day.day_label === dayLabel)?.id ?? null;
-  };
-
-  const updateDayField = (
-    weekIndex: number,
-    dayIndex: number,
-    field: keyof PacingGuideDailyPlan,
-    value: string,
-  ) => {
-    setWeeks((current) =>
-      current.map((item, index) =>
-        index === weekIndex
-          ? {
-              ...item,
-              daily_plans: item.daily_plans.map((plan, planIndex) =>
-                planIndex === dayIndex ? { ...plan, [field]: value } : plan,
-              ),
-            }
-          : item,
-      ),
-    );
-  };
 
   const applyGuideToForm = (guide: PacingGuideDetail) => {
     setSavedGuideId(guide.id);
@@ -138,21 +77,6 @@ export function TeacherAssistV2PacingGuideBuilderScreen() {
     }
     if (guide.unit_title) setUnitTitle(guide.unit_title);
     if (guide.estimated_duration_weeks != null) setEstimatedWeeks(String(guide.estimated_duration_weeks));
-    if (guide.start_week != null) setStartWeek(String(guide.start_week));
-    if (guide.end_week != null) setEndWeek(String(guide.end_week));
-    setWeeks(
-      guide.periods.length
-        ? guide.periods.map((period) => ({
-            title: period.title,
-            description: period.description ?? "",
-            sequence_number: period.sequence_number,
-            unit_title: period.unit_title ?? "",
-            daily_plans:
-              period.daily_plans && period.daily_plans.length > 0 ? period.daily_plans : emptyDailyPlans(),
-          }))
-        : [defaultWeek(1)],
-    );
-    syncSavedPeriodsFromGuide(guide);
     const objectiveIds = new Set<string>();
     guide.periods.forEach((period) => {
       period.objectives.forEach((row) => objectiveIds.add(row.objective_id));
@@ -220,18 +144,8 @@ export function TeacherAssistV2PacingGuideBuilderScreen() {
       title: title.trim(),
       description: description.trim() || null,
       unit_title: unitTitle.trim() || null,
-      estimated_duration_weeks: Number.parseInt(estimatedWeeks, 10) || 1,
-      start_week: Number.parseInt(startWeek, 10) || 1,
-      end_week: Number.parseInt(endWeek, 10) || 1,
+      estimated_duration_weeks: Number.parseInt(estimatedWeeks, 10) || 6,
       objectives: selectedObjectiveIds.map((objective_id) => ({ objective_id, is_required: true })),
-      weeks: weeks.map((week, index) => ({
-        title: week.title,
-        description: week.description || null,
-        sequence_number: week.sequence_number ?? index + 1,
-        unit_title: week.unit_title || unitTitle || null,
-        daily_plans: week.daily_plans.filter((day) => day.day_label.trim()),
-        objective_ids: selectedObjectiveIds,
-      })),
     };
   }, [
     stateId,
@@ -245,15 +159,12 @@ export function TeacherAssistV2PacingGuideBuilderScreen() {
     description,
     unitTitle,
     estimatedWeeks,
-    startWeek,
-    endWeek,
     selectedObjectiveIds,
-    weeks,
   ]);
 
   const saveStructure = async (): Promise<string | null> => {
     if (!payload) {
-      setError("Complete scope, objectives, and weekly plan before saving.");
+      setError("Complete scope, objectives, and duration before saving.");
       return null;
     }
     setSaving(true);
@@ -264,17 +175,7 @@ export function TeacherAssistV2PacingGuideBuilderScreen() {
         ? await updateV2PacingGuideBuilder(savedGuideId, payload)
         : await createV2PacingGuideBuilder(payload);
       setSavedGuideId(result.id);
-      setSavedPeriods(
-        result.periods.map((period) => ({
-          id: period.id,
-          title: period.title,
-          sequence_number: period.sequence_number,
-          days: (period.daily_plans ?? [])
-            .filter((day) => day.id)
-            .map((day) => ({ id: day.id as string, day_label: day.day_label })),
-        })),
-      );
-      setMessage("Pacing guide structure saved.");
+      setMessage("Pacing guide saved.");
       return result.id;
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Could not save pacing guide.");
@@ -294,7 +195,8 @@ export function TeacherAssistV2PacingGuideBuilderScreen() {
           {editGuideId ? "Edit pacing guide" : "Create pacing guide"}
         </h1>
         <p className="mt-1 text-sm text-slate-600">
-          Build a district or school pacing guide linked to catalog scope, objectives, weekly plans, and resources.
+          Define scope, TEKS objectives, duration, and supporting curriculum documents. AI generates the daily
+          lesson plans for teachers based on this guide.
         </p>
       </header>
 
@@ -324,6 +226,7 @@ export function TeacherAssistV2PacingGuideBuilderScreen() {
         </div>
       ) : null}
 
+      {/* Step 0 — Scope */}
       {step === 0 ? (
         <section className="ta-panel space-y-4 p-5">
           <h2 className="text-base font-semibold text-slate-900">Scope</h2>
@@ -413,213 +316,146 @@ export function TeacherAssistV2PacingGuideBuilderScreen() {
               <span className="font-medium text-slate-700">Description</span>
               <textarea className="ta-input mt-1 w-full" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
             </label>
-            <label className="block text-sm">
-              <span className="font-medium text-slate-700">Unit title</span>
-              <input className="ta-input mt-1 w-full" value={unitTitle} onChange={(e) => setUnitTitle(e.target.value)} />
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium text-slate-700">Estimated duration (weeks)</span>
-              <input className="ta-input mt-1 w-full" type="number" min={1} value={estimatedWeeks} onChange={(e) => setEstimatedWeeks(e.target.value)} />
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium text-slate-700">Start week</span>
-              <input className="ta-input mt-1 w-full" type="number" min={1} value={startWeek} onChange={(e) => setStartWeek(e.target.value)} />
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium text-slate-700">End week</span>
-              <input className="ta-input mt-1 w-full" type="number" min={1} value={endWeek} onChange={(e) => setEndWeek(e.target.value)} />
-            </label>
           </div>
         </section>
       ) : null}
 
+      {/* Step 1 — Objectives */}
       {step === 1 ? (
         <section className="ta-panel space-y-4 p-5">
-          <h2 className="text-base font-semibold text-slate-900">Learning objectives</h2>
-          <p className="text-sm text-slate-600">Select objectives from the academic catalog. Freeform objectives are not allowed.</p>
+          <h2 className="text-base font-semibold text-slate-900">Learning objectives (TEKS)</h2>
+          <p className="text-sm text-slate-600">
+            Select one or more TEKS from the academic catalog. AI will align all generated lesson plans and
+            assignments to these objectives.
+          </p>
           {!gradeId || !subjectId ? (
             <p className="text-sm text-slate-500">Choose grade and subject in Scope first.</p>
+          ) : objectives.length === 0 ? (
+            <p className="text-sm text-slate-500">No objectives found for this grade and subject.</p>
           ) : (
-            <ul className="max-h-96 space-y-2 overflow-y-auto">
-              {objectives.map((objective) => (
-                <li key={objective.id} className="rounded-lg border border-slate-200 px-3 py-2">
-                  <label className="flex items-start gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={selectedObjectiveIds.includes(objective.id)}
-                      onChange={(event) => {
-                        setSelectedObjectiveIds((current) =>
-                          event.target.checked
-                            ? [...current, objective.id]
-                            : current.filter((id) => id !== objective.id),
-                        );
-                      }}
-                    />
-                    <span>
-                      <span className="font-medium text-slate-900">{objective.objective_id}</span>
-                      <span className="mt-1 block text-slate-600">{objective.description}</span>
-                    </span>
-                  </label>
-                </li>
-              ))}
-            </ul>
+            <>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-slate-500">{selectedObjectiveIds.length} selected</p>
+                <button
+                  type="button"
+                  className="text-xs text-sky-700 underline"
+                  onClick={() =>
+                    setSelectedObjectiveIds(
+                      selectedObjectiveIds.length === objectives.length ? [] : objectives.map((o) => o.id),
+                    )
+                  }
+                >
+                  {selectedObjectiveIds.length === objectives.length ? "Deselect all" : "Select all"}
+                </button>
+              </div>
+              <ul className="max-h-[32rem] space-y-2 overflow-y-auto">
+                {objectives.map((objective) => (
+                  <li key={objective.id} className="rounded-lg border border-slate-200 px-3 py-2">
+                    <label className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={selectedObjectiveIds.includes(objective.id)}
+                        onChange={(event) => {
+                          setSelectedObjectiveIds((current) =>
+                            event.target.checked
+                              ? [...current, objective.id]
+                              : current.filter((id) => id !== objective.id),
+                          );
+                        }}
+                      />
+                      <span>
+                        <span className="font-medium text-slate-900">{objective.objective_id}</span>
+                        <span className="mt-1 block text-slate-600">{objective.description}</span>
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </section>
       ) : null}
 
+      {/* Step 2 — Duration */}
       {step === 2 ? (
         <section className="ta-panel space-y-4 p-5">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-base font-semibold text-slate-900">Weekly / daily plan</h2>
-            <button
-              type="button"
-              className="ta-button-secondary h-8 px-3 text-xs"
-              onClick={() => setWeeks((current) => [...current, defaultWeek(current.length + 1)])}
-            >
-              Add week
-            </button>
+          <h2 className="text-base font-semibold text-slate-900">Duration</h2>
+          <p className="text-sm text-slate-600">
+            Specify how many weeks teachers will spend on this set of objectives. AI uses this duration to
+            structure a full daily teaching plan — it determines what to teach each week and each day based on
+            the selected TEKS and supporting documents.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm">
+              <span className="font-medium text-slate-700">Duration (weeks)</span>
+              <input
+                className="ta-input mt-1 w-full"
+                type="number"
+                min={1}
+                max={36}
+                value={estimatedWeeks}
+                onChange={(e) => setEstimatedWeeks(e.target.value)}
+              />
+              <span className="mt-1 block text-xs text-slate-500">
+                Typical range: 2–8 weeks per objective set.
+              </span>
+            </label>
+            <label className="block text-sm">
+              <span className="font-medium text-slate-700">Unit title (optional)</span>
+              <input
+                className="ta-input mt-1 w-full"
+                placeholder="e.g. Informational Reading Unit 2"
+                value={unitTitle}
+                onChange={(e) => setUnitTitle(e.target.value)}
+              />
+            </label>
           </div>
-          {weeks.map((week, weekIndex) => (
-            <div key={weekIndex} className="rounded-xl border border-slate-200 p-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block text-sm sm:col-span-2">
-                  <span className="font-medium text-slate-700">Week title</span>
-                  <input
-                    className="ta-input mt-1 w-full"
-                    value={week.title}
-                    onChange={(event) =>
-                      setWeeks((current) =>
-                        current.map((item, index) => (index === weekIndex ? { ...item, title: event.target.value } : item)),
-                      )
-                    }
-                  />
-                </label>
-              </div>
-              <div className="mt-4 space-y-2">
-                {week.daily_plans.map((day, dayIndex) => {
-                  const savedPeriod = savedPeriods[weekIndex];
-                  const dayId = day.id ?? resolveSavedDayId(weekIndex, day.day_label);
-                  const topicMissing = !(day.daily_topic ?? "").trim();
-                  return (
-                    <details key={`${weekIndex}-${day.day_label}`} className="rounded-lg border border-slate-200 bg-white">
-                      <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-slate-900">
-                        <span className="inline-flex items-center gap-2">
-                          <span className="text-xs uppercase tracking-wide text-slate-500">{day.day_label}</span>
-                          <span>{day.daily_topic?.trim() || "Add daily topic"}</span>
-                          {topicMissing ? (
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
-                              Topic required
-                            </span>
-                          ) : null}
-                        </span>
-                      </summary>
-                      <div className="space-y-3 border-t border-slate-100 px-3 py-3">
-                        <label className="block text-sm">
-                          <span className="font-medium text-slate-700">Daily topic</span>
-                          <input
-                            className={`ta-input mt-1 w-full ${topicMissing ? "border-amber-400" : ""}`}
-                            value={day.daily_topic ?? ""}
-                            onChange={(event) => updateDayField(weekIndex, dayIndex, "daily_topic", event.target.value)}
-                          />
-                        </label>
-                        <label className="block text-sm">
-                          <span className="font-medium text-slate-700">Learning objective focus</span>
-                          <input
-                            className="ta-input mt-1 w-full"
-                            value={day.objective_focus ?? ""}
-                            onChange={(event) => updateDayField(weekIndex, dayIndex, "objective_focus", event.target.value)}
-                          />
-                        </label>
-                        <label className="block text-sm">
-                          <span className="font-medium text-slate-700">Materials needed</span>
-                          <textarea
-                            className="ta-input mt-1 w-full"
-                            rows={2}
-                            value={day.materials_needed ?? ""}
-                            onChange={(event) => updateDayField(weekIndex, dayIndex, "materials_needed", event.target.value)}
-                          />
-                        </label>
-                        <label className="block text-sm">
-                          <span className="font-medium text-slate-700">Assessment / check for understanding</span>
-                          <textarea
-                            className="ta-input mt-1 w-full"
-                            rows={2}
-                            value={day.assessment_check ?? ""}
-                            onChange={(event) => updateDayField(weekIndex, dayIndex, "assessment_check", event.target.value)}
-                          />
-                        </label>
-                        <label className="block text-sm">
-                          <span className="font-medium text-slate-700">Teacher notes</span>
-                          <textarea
-                            className="ta-input mt-1 w-full"
-                            rows={2}
-                            value={day.teacher_notes ?? ""}
-                            onChange={(event) => updateDayField(weekIndex, dayIndex, "teacher_notes", event.target.value)}
-                          />
-                        </label>
-                        {savedGuideId && dayId && savedPeriod ? (
-                          <PacingGuideSupportingMaterialsPanel
-                            pacingGuideId={savedGuideId}
-                            periodId={savedPeriod.id}
-                            periodDayId={dayId}
-                            compact
-                            scopeLabel={`${day.day_label} resources`}
-                          />
-                        ) : (
-                          <p className="text-xs text-slate-500">
-                            Save the guide structure to attach day-specific files and links.
-                          </p>
-                        )}
-                      </div>
-                    </details>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
         </section>
       ) : null}
 
+      {/* Step 3 — Supporting Documents */}
       {step === 3 ? (
         <section className="ta-panel space-y-4 p-5">
-          <h2 className="text-base font-semibold text-slate-900">Resources & links</h2>
+          <h2 className="text-base font-semibold text-slate-900">Supporting documents</h2>
+          <p className="text-sm text-slate-600">
+            Upload curriculum documents, pacing calendars, book lists, assignment guides, or any instructional
+            reference material. AI extracts and uses this content when generating lesson plans — the more context
+            you provide, the more specific and aligned the generated plans will be.
+          </p>
           {!savedGuideId ? (
-            <p className="text-sm text-slate-600">
-              Save the guide structure first so uploads and links stay connected to this pacing guide.
-            </p>
-          ) : null}
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="ta-button-primary"
-              disabled={saving}
-              onClick={() => void saveStructure().then((id) => id && setStep(3))}
-            >
-              {saving ? "Saving…" : savedGuideId ? "Update structure" : "Save structure & attach resources"}
-            </button>
-          </div>
-          {savedGuideId ? (
+            <div className="space-y-3">
+              <p className="text-sm text-amber-800">Save the guide structure first to attach documents.</p>
+              <button
+                type="button"
+                className="ta-button-primary"
+                disabled={saving}
+                onClick={() => void saveStructure()}
+              >
+                {saving ? "Saving…" : "Save & continue to documents"}
+              </button>
+            </div>
+          ) : (
             <>
+              <button
+                type="button"
+                className="ta-button-secondary h-8 px-3 text-xs"
+                disabled={saving}
+                onClick={() => void saveStructure()}
+              >
+                {saving ? "Saving…" : "Update guide"}
+              </button>
               <PacingGuideSupportingMaterialsPanel
                 pacingGuideId={savedGuideId}
                 guideLevelOnly
-                scopeLabel="Guide level"
+                scopeLabel="Curriculum documents & references"
               />
-              {savedPeriods.map((period) => (
-                <PacingGuideSupportingMaterialsPanel
-                  key={period.id}
-                  pacingGuideId={savedGuideId}
-                  periodId={period.id}
-                  weekLevelOnly
-                  scopeLabel={`Week ${period.sequence_number}: ${period.title}`}
-                />
-              ))}
             </>
-          ) : null}
+          )}
         </section>
       ) : null}
 
+      {/* Step 4 — Review & Save */}
       {step === 4 ? (
         <section className="ta-panel space-y-4 p-5">
           <h2 className="text-base font-semibold text-slate-900">Review & save</h2>
@@ -633,20 +469,31 @@ export function TeacherAssistV2PacingGuideBuilderScreen() {
               <dd className="font-medium text-slate-900">{ownershipScope === "school" ? "School" : "District"}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Objectives</dt>
-              <dd className="font-medium text-slate-900">{selectedObjectiveIds.length}</dd>
+              <dt className="text-slate-500">Unit title</dt>
+              <dd className="font-medium text-slate-900">{unitTitle || "—"}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Weeks</dt>
-              <dd className="font-medium text-slate-900">{weeks.length}</dd>
+              <dt className="text-slate-500">Duration</dt>
+              <dd className="font-medium text-slate-900">{estimatedWeeks} week{Number(estimatedWeeks) !== 1 ? "s" : ""}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">TEKS objectives</dt>
+              <dd className="font-medium text-slate-900">{selectedObjectiveIds.length} selected</dd>
             </div>
           </dl>
+          <p className="text-sm text-slate-600">
+            When a teacher generates a lesson plan using this guide, AI will produce a complete daily teaching
+            plan for the full duration — using the selected TEKS and all attached supporting documents.
+          </p>
           <div className="flex flex-wrap gap-2">
             <button type="button" className="ta-button-primary" disabled={saving} onClick={() => void saveStructure()}>
               {saving ? "Saving…" : "Save pacing guide"}
             </button>
             {savedGuideId ? (
-              <Link href={`/teacher-assist-v2/admin/pacing-guides/view/?id=${encodeURIComponent(savedGuideId)}`} className="ta-button-secondary inline-flex h-9 items-center px-3 text-sm">
+              <Link
+                href={`/teacher-assist-v2/admin/pacing-guides/view/?id=${encodeURIComponent(savedGuideId)}`}
+                className="ta-button-secondary inline-flex h-9 items-center px-3 text-sm"
+              >
                 Open guide
               </Link>
             ) : null}

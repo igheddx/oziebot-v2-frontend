@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { TeacherAssistV2ClassInsightPanel } from "@/components/teacher-assist-v2/teacher-assist-v2-class-insight-panel";
+import { TeacherAssistV2RecoveryQueuePanel } from "@/components/teacher-assist-v2/teacher-assist-v2-recovery-queue-panel";
+
 import {
   acceptAllViewedV2SubmissionGrades,
   downloadV2AssignmentRubricScoreReportDocx,
@@ -17,11 +20,13 @@ import {
   uploadV2AssignmentSubmissionBatch,
 } from "@/lib/teacher-assist-v2-api";
 import { resolveTeacherAssistFileUrl } from "@/lib/auth-service";
+import { useTeacherAssistV2 } from "@/components/teacher-assist-v2/teacher-assist-v2-context";
 import { MasteryLevelBadge } from "@/components/teacher-assist-v2/mastery-level-badge";
 import type { AssignmentDetail, StudentSubmissionSummary } from "@/lib/teacher-assist-v2-types";
 
 export function TeacherAssistV2AssignmentViewerScreen({ assignmentId: assignmentIdProp }: { assignmentId?: string } = {}) {
   const searchParams = useSearchParams();
+  const { setProcessingIndicator, clearProcessingIndicator } = useTeacherAssistV2();
   const assignmentId = assignmentIdProp ?? searchParams.get("id") ?? "";
   const [detail, setDetail] = useState<AssignmentDetail | null>(null);
   const [submissions, setSubmissions] = useState<StudentSubmissionSummary[]>([]);
@@ -34,11 +39,13 @@ export function TeacherAssistV2AssignmentViewerScreen({ assignmentId: assignment
   const [uploading, setUploading] = useState(false);
   const [manualStudentBySubmission, setManualStudentBySubmission] = useState<Record<string, string>>({});
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [gradingAll, setGradingAll] = useState(false);
   const [coverSheetLoading, setCoverSheetLoading] = useState(false);
   const [gradingSubmissionId, setGradingSubmissionId] = useState<string | null>(null);
   const [bulkAccepting, setBulkAccepting] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
+  const [queueRefreshKey, setQueueRefreshKey] = useState(0);
 
   const reload = useCallback(async () => {
     if (!assignmentId) return;
@@ -57,10 +64,32 @@ export function TeacherAssistV2AssignmentViewerScreen({ assignmentId: assignment
       .finally(() => setLoading(false));
   }, [assignmentId, reload]);
 
+  useEffect(() => {
+    if ((detail?.grading_activity?.processing_count ?? 0) === 0) return;
+    const timer = window.setInterval(() => {
+      void reload().catch(() => undefined);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [detail?.grading_activity?.processing_count, reload]);
+
+  useEffect(() => {
+    if (!detail) return;
+    if ((detail.grading_activity?.processing_count ?? 0) > 0) {
+      setProcessingIndicator({
+        kind: "grading",
+        targetId: detail.id,
+        label: "AI grading in progress",
+      });
+      return;
+    }
+    clearProcessingIndicator(detail.id);
+  }, [clearProcessingIndicator, detail, setProcessingIndicator]);
+
   async function handlePrintCoverSheets() {
     if (!assignmentId) return;
     setCoverSheetLoading(true);
     setActionError(null);
+    setActionNotice(null);
     try {
       const coverSheet = detail?.cover_sheet ?? (await generateV2AssignmentCoverSheets(assignmentId));
       if (!coverSheet?.download_url) {
@@ -82,6 +111,7 @@ export function TeacherAssistV2AssignmentViewerScreen({ assignmentId: assignment
     setUploading(true);
     setUploadError(null);
     setActionError(null);
+    setActionNotice(null);
     const studentNumber = uploadStudentNumber.trim() ? Number(uploadStudentNumber) : undefined;
     try {
       for (let index = 0; index < uploadFiles.length; index += 1) {
@@ -113,6 +143,7 @@ export function TeacherAssistV2AssignmentViewerScreen({ assignmentId: assignment
     const value = manualStudentBySubmission[submissionId];
     if (!value) return;
     setActionError(null);
+    setActionNotice(null);
     try {
       await manualMatchV2StudentSubmission(submissionId, Number(value));
       await reload();
@@ -123,6 +154,7 @@ export function TeacherAssistV2AssignmentViewerScreen({ assignmentId: assignment
 
   async function handleMarkReady(submissionId: string) {
     setActionError(null);
+    setActionNotice(null);
     try {
       await updateV2StudentSubmissionStatus(submissionId, "READY_FOR_GRADING");
       await reload();
@@ -135,8 +167,15 @@ export function TeacherAssistV2AssignmentViewerScreen({ assignmentId: assignment
     if (!assignmentId) return;
     setGradingAll(true);
     setActionError(null);
+    setActionNotice(null);
     try {
       await generateV2AssignmentGradingDrafts(assignmentId);
+      setProcessingIndicator({
+        kind: "grading",
+        targetId: assignmentId,
+        label: "AI grading in progress",
+      });
+      setActionNotice("AI grading started. You can keep using the app while drafts are prepared.");
       await reload();
     } catch (nextError) {
       setActionError(nextError instanceof Error ? nextError.message : "AI grading failed");
@@ -148,8 +187,15 @@ export function TeacherAssistV2AssignmentViewerScreen({ assignmentId: assignment
   async function handleGenerateSubmissionGrade(submissionId: string) {
     setGradingSubmissionId(submissionId);
     setActionError(null);
+    setActionNotice(null);
     try {
       await generateV2SubmissionGradingDraft(submissionId);
+      setProcessingIndicator({
+        kind: "grading",
+        targetId: assignmentId,
+        label: "AI grading in progress",
+      });
+      setActionNotice("AI grading started for this submission.");
       await reload();
     } catch (nextError) {
       setActionError(nextError instanceof Error ? nextError.message : "AI grading failed");
@@ -162,6 +208,7 @@ export function TeacherAssistV2AssignmentViewerScreen({ assignmentId: assignment
     if (!assignmentId) return;
     setBulkAccepting(true);
     setActionError(null);
+    setActionNotice(null);
     try {
       await acceptAllViewedV2SubmissionGrades(assignmentId);
       await reload();
@@ -176,6 +223,7 @@ export function TeacherAssistV2AssignmentViewerScreen({ assignmentId: assignment
     if (!assignmentId) return;
     setReportLoading(true);
     setActionError(null);
+    setActionNotice(null);
     try {
       await downloadV2AssignmentRubricScoreReportDocx(assignmentId);
     } catch (nextError) {
@@ -211,6 +259,8 @@ export function TeacherAssistV2AssignmentViewerScreen({ assignmentId: assignment
   const gradeReviews = detail.grade_reviews ?? [];
   const gradebookSummary = detail.gradebook_summary;
   const objectivePerformance = detail.objective_performance ?? [];
+  const gradingActivity = detail.grading_activity;
+  const gradingInProgress = (gradingActivity?.processing_count ?? 0) > 0;
   const viewedDraftCount = gradeReviews.filter(
     (row) => row.has_grading_draft && row.teacher_viewed && !row.official_score,
   ).length;
@@ -233,6 +283,29 @@ export function TeacherAssistV2AssignmentViewerScreen({ assignmentId: assignment
           {detail.creation_origin === "TEACHER_MANUAL" ? " · Teacher-created" : ""}
         </p>
       </header>
+
+      {gradingInProgress ? (
+        <section className="rounded-2xl border border-violet-200 bg-violet-50/70 p-4">
+          <h2 className="text-sm font-semibold text-slate-900">AI grading in progress</h2>
+          <p className="mt-1 text-sm text-violet-900">
+            {gradingActivity?.processing_count} grading job{gradingActivity?.processing_count === 1 ? "" : "s"} running for
+            this assignment. You can keep using TeacherAssist while these drafts finish.
+          </p>
+        </section>
+      ) : null}
+
+      {gradingActivity?.failed_count ? (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+          <h2 className="text-sm font-semibold text-slate-900">Recent grading issue</h2>
+          <p className="mt-1 text-sm text-amber-900">
+            {gradingActivity.latest_error_message ?? "One or more grading jobs failed."}
+          </p>
+        </section>
+      ) : null}
+
+      {actionNotice ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{actionNotice}</div>
+      ) : null}
 
       {supportsRubricReport && canPrintClassRubricReport ? (
         <section className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
@@ -377,12 +450,22 @@ export function TeacherAssistV2AssignmentViewerScreen({ assignmentId: assignment
                 embedded viewer. Grades go to the gradebook only after you confirm.
               </p>
             </div>
-            <Link
-              href={`/teacher-assist-v2/assignments/review?id=${encodeURIComponent(assignmentId)}`}
-              className="ta-button-primary inline-flex h-9 items-center px-4 text-sm"
-            >
-              Open review
-            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="ta-button-secondary inline-flex h-9 items-center px-4 text-sm"
+                disabled={gradingAll || gradingInProgress}
+                onClick={() => void handleGenerateAllGrades()}
+              >
+                {gradingAll ? "Starting…" : gradingInProgress ? "Grading in progress" : "Start AI grading"}
+              </button>
+              <Link
+                href={`/teacher-assist-v2/assignments/review?id=${encodeURIComponent(assignmentId)}`}
+                className="ta-button-primary inline-flex h-9 items-center px-4 text-sm"
+              >
+                Open review
+              </Link>
+            </div>
           </div>
         </section>
       ) : null}
@@ -700,6 +783,18 @@ export function TeacherAssistV2AssignmentViewerScreen({ assignmentId: assignment
           </ul>
         )}
       </section>
+
+      <TeacherAssistV2ClassInsightPanel
+        assignmentId={assignmentId}
+        packageId={detail.instructional_plan_id}
+        onQueueItemCreated={() => setQueueRefreshKey((k) => k + 1)}
+      />
+
+      <TeacherAssistV2RecoveryQueuePanel
+        assignmentId={assignmentId}
+        packageId={detail.instructional_plan_id}
+        refreshTrigger={queueRefreshKey}
+      />
     </div>
   );
 }

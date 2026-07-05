@@ -22,7 +22,13 @@ import {
   totalsFromRubricSections,
   type RubricScoreSection,
 } from "@/components/teacher-assist-v2/teacher-assist-v2-rubric-score-editor";
-import type { AssignmentDetail, GradingDraft, StudentSubmissionDetail, StudentSubmissionSummary } from "@/lib/teacher-assist-v2-types";
+import type {
+  AssignmentDetail,
+  GradingDraft,
+  StudentFacingFeedback,
+  StudentSubmissionDetail,
+  StudentSubmissionSummary,
+} from "@/lib/teacher-assist-v2-types";
 import { resolveMasteryLevel, formatMasteryLevelLabel } from "@/lib/teacher-assist-v2-mastery";
 
 function draftRubricSections(draft: GradingDraft | null | undefined): RubricScoreSection[] {
@@ -48,6 +54,7 @@ export function TeacherAssistV2AssignmentReviewScreen({ assignmentId: assignment
   const [overrideReason, setOverrideReason] = useState("");
   const [rubricSections, setRubricSections] = useState<RubricScoreSection[]>([]);
   const [supplementFile, setSupplementFile] = useState<File | null>(null);
+  const [studentFeedback, setStudentFeedback] = useState<StudentFacingFeedback | null>(null);
 
   const activeSubmission = queue[activeIndex] ?? null;
 
@@ -72,8 +79,10 @@ export function TeacherAssistV2AssignmentReviewScreen({ assignmentId: assignment
       setScore(String(totals.score || submission.grading_draft.score));
       setMaxScore(String(totals.maxScore || submission.grading_draft.max_score));
       setTeacherComment(submission.assignment_grade?.teacher_comment ?? submission.grading_draft.teacher_comment_draft);
+      setStudentFeedback(submission.grading_draft.student_facing_feedback ?? null);
     } else {
       setRubricSections([]);
+      setStudentFeedback(null);
     }
   }, []);
 
@@ -139,6 +148,7 @@ export function TeacherAssistV2AssignmentReviewScreen({ assignmentId: assignment
       max_score: Number(maxScore),
       teacher_comment: teacherComment,
       rubric_json: rubricJson,
+      student_facing_feedback: studentFeedback,
     };
     try {
       if (showModify) {
@@ -397,9 +407,119 @@ export function TeacherAssistV2AssignmentReviewScreen({ assignmentId: assignment
                 </div>
               ) : null}
 
+              {/* Confidence + uncertainty flags */}
+              {draft.confidence_score != null ? (
+                <p className="mt-2 text-xs text-slate-500">
+                  AI confidence: <span className="font-medium">{Math.round(draft.confidence_score * 100)}%</span>
+                  {draft.uncertainty_flags && draft.uncertainty_flags.length > 0 ? (
+                    <span className="ml-2 text-amber-600">· {draft.uncertainty_flags.join(" · ")}</span>
+                  ) : null}
+                </p>
+              ) : null}
+
               {usesRubric && rubricSections.length > 0 ? (
                 <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
                   <TeacherAssistV2RubricScoreEditor sections={rubricSections} onChange={handleRubricChange} />
+                </div>
+              ) : null}
+
+              {/* Evidence Used */}
+              {draft.evidence_used ? (
+                <div className="mt-4 rounded-lg border border-slate-100 bg-white px-3 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-1">Evidence Used</p>
+                  <p className="text-xs text-slate-700 leading-relaxed">{draft.evidence_used}</p>
+                </div>
+              ) : null}
+
+              {/* What the AI Noticed (teacher-facing explanation) */}
+              {draft.teacher_facing_explanation ? (
+                <div className="mt-3 rounded-lg border border-slate-100 bg-white px-3 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-1">What the AI Noticed</p>
+                  <p className="text-xs text-slate-700 leading-relaxed">{draft.teacher_facing_explanation}</p>
+                </div>
+              ) : null}
+
+              {/* Strengths & Areas to Strengthen */}
+              {(draft.strengths?.length > 0 || draft.improvements?.length > 0) ? (
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {draft.strengths?.length > 0 ? (
+                    <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-emerald-700 mb-1">Strengths</p>
+                      <ul className="space-y-1">
+                        {draft.strengths.map((s, i) => (
+                          <li key={i} className="text-xs text-slate-700 flex items-start gap-1.5">
+                            <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+                            {s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {draft.improvements?.length > 0 ? (
+                    <div className="rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-700 mb-1">Areas to Strengthen</p>
+                      <ul className="space-y-1">
+                        {draft.improvements.map((s, i) => (
+                          <li key={i} className="text-xs text-slate-700 flex items-start gap-1.5">
+                            <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
+                            {s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {/* Likely Learning Gap */}
+              {draft.suspected_misconception ? (
+                <div className="mt-3 rounded-lg border border-rose-100 bg-rose-50/60 px-3 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-rose-600 mb-0.5">Likely Learning Gap</p>
+                  <p className="text-xs text-slate-700">{draft.suspected_misconception}</p>
+                </div>
+              ) : null}
+
+              {/* Student Feedback (editable — Celebrate / Correct / Encourage) */}
+              {studentFeedback ? (
+                <div className="mt-4 rounded-lg border border-violet-100 bg-violet-50/50 px-3 py-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-violet-700">Student Feedback</p>
+                    <p className="text-[10px] text-slate-400">Edit before confirming</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block space-y-0.5 text-xs">
+                      <span className="font-medium text-slate-600">Celebrate</span>
+                      <input
+                        className="ta-input h-8 w-full text-xs"
+                        value={studentFeedback.celebrate}
+                        onChange={(e) => setStudentFeedback({ ...studentFeedback, celebrate: e.target.value })}
+                      />
+                    </label>
+                    <label className="block space-y-0.5 text-xs">
+                      <span className="font-medium text-slate-600">Correct</span>
+                      <input
+                        className="ta-input h-8 w-full text-xs"
+                        value={studentFeedback.correct}
+                        onChange={(e) => setStudentFeedback({ ...studentFeedback, correct: e.target.value })}
+                      />
+                    </label>
+                    <label className="block space-y-0.5 text-xs">
+                      <span className="font-medium text-slate-600">Encourage</span>
+                      <input
+                        className="ta-input h-8 w-full text-xs"
+                        value={studentFeedback.encourage}
+                        onChange={(e) => setStudentFeedback({ ...studentFeedback, encourage: e.target.value })}
+                      />
+                    </label>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Suggested Next Step */}
+              {draft.recommended_next_step ? (
+                <div className="mt-3 rounded-lg border border-slate-100 bg-white px-3 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-0.5">Suggested Next Step</p>
+                  <p className="text-xs text-slate-700">{draft.recommended_next_step}</p>
                 </div>
               ) : null}
 

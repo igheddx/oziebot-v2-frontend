@@ -55,13 +55,27 @@ export function TeacherAssistV2ObjectivesScreen() {
     () => grades.map((g) => ({ value: g.id, label: `${g.display_name} (${g.grade_code})` })),
     [grades],
   );
-  const subjectOptions = useMemo(
-    () => subjects.map((s) => ({ value: s.id, label: `${s.display_name} (${s.subject_code})` })),
-    [subjects],
-  );
   const schoolYearOptions = useMemo(
     () => schoolYears.map((y) => ({ value: y.id, label: y.title })),
     [schoolYears],
+  );
+
+  // Returns subjects filtered to the currently selected grade so the dropdown
+  // never shows duplicates (subjects are stored per-grade in the DB).
+  const getSubjectOptions = useMemo(
+    () => (form: Record<string, string>) => {
+      const gradeId = form.grade_id;
+      const filtered = gradeId
+        ? subjects.filter((s) => s.grade_id === gradeId)
+        : [];
+      return filtered.map((s) => ({
+        value: s.id,
+        label: s.subject_code === s.display_name
+          ? s.display_name
+          : `${s.display_name} (${s.subject_code})`,
+      }));
+    },
+    [subjects],
   );
 
   const subjectCode = (subjectId: string) =>
@@ -106,7 +120,7 @@ export function TeacherAssistV2ObjectivesScreen() {
       fields={[
         { key: "state_id", label: "State", type: "select", options: states.map((s) => ({ value: s.id, label: s.name })), required: true },
         { key: "grade_id", label: "Grade", type: "select", options: gradeOptions, required: true },
-        { key: "subject_id", label: "Subject", type: "select", options: subjectOptions, required: true },
+        { key: "subject_id", label: "Subject", type: "select", getOptions: getSubjectOptions, required: true },
         { key: "school_year_id", label: "School year", type: "select", options: schoolYearOptions, required: true },
         { key: "objective_type", label: "Type", type: "select", options: OBJECTIVE_TYPES, required: true },
         { key: "objective_id", label: "Objective ID", placeholder: "5.MATH.1" },

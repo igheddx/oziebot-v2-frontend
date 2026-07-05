@@ -105,7 +105,7 @@ function V2Gate({ children }: { children: React.ReactNode }) {
 export function TeacherAssistV2Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { logoutUser, user } = useAuth();
-  const { context } = useTeacherAssistV2();
+  const { context, processingIndicator } = useTeacherAssistV2();
   const isPresentationRoute = pathname.startsWith("/teacher-assist-v2/teach");
   const isRootAdmin = context?.role === "root_admin";
   const isTeacher = context?.role === "teacher";
@@ -136,6 +136,12 @@ export function TeacherAssistV2Shell({ children }: { children: React.ReactNode }
               v2
             </span>
             <div className="ml-auto flex flex-wrap items-center gap-2">
+              {processingIndicator ? (
+                <div className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] font-medium text-violet-800">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-violet-300 border-t-violet-700" />
+                  <span>{processingIndicator.label}</span>
+                </div>
+              ) : null}
               <AppSwitcher />
               <div className="hidden text-right sm:block">
                 <p className="max-w-[180px] truncate text-xs font-semibold text-slate-900">{user?.full_name ?? "User"}</p>

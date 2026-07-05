@@ -215,6 +215,7 @@ export type AssignmentDetail = {
   }>;
   submission_summary?: SubmissionSummaryCounts;
   completion_summary?: AssignmentCompletionSummary;
+  grading_activity?: GradingActivitySummary;
   grade_reviews?: GradeReviewRow[];
   gradebook_summary?: GradebookSummary;
   objective_performance?: ObjectivePerformanceSummary[];
@@ -253,6 +254,14 @@ export type AssignmentCompletionSummary = {
   confirmed_count: number;
   rejected_count: number;
   pending_count: number;
+};
+
+export type GradingActivitySummary = {
+  queued_count: number;
+  running_count: number;
+  processing_count: number;
+  failed_count: number;
+  latest_error_message: string | null;
 };
 
 
@@ -425,6 +434,11 @@ export type AssignmentGrade = {
   created_at: string;
   updated_at: string;
   is_official: boolean;
+  student_facing_feedback?: StudentFacingFeedback | null;
+  ai_student_facing_feedback?: StudentFacingFeedback | null;
+  suspected_misconception?: string | null;
+  recommended_next_step?: string | null;
+  evidence_used?: string | null;
 };
 
 export type GradeAuditEvent = {
@@ -470,6 +484,12 @@ export type StudentSubmissionSummary = {
   has_grading_draft?: boolean;
 };
 
+export type StudentFacingFeedback = {
+  celebrate: string;
+  correct: string;
+  encourage: string;
+};
+
 export type GradingDraft = {
   id: string;
   score: number;
@@ -484,6 +504,14 @@ export type GradingDraft = {
       max_score: number;
       feedback: string;
     }>;
+    student_facing_feedback?: StudentFacingFeedback | null;
+    ai_student_facing_feedback?: StudentFacingFeedback | null;
+    teacher_facing_explanation?: string | null;
+    suspected_misconception?: string | null;
+    recommended_next_step?: string | null;
+    uncertainty_flags?: string[];
+    evidence_used?: string | null;
+    objective_evidence?: Array<{objective_id: string; evidence: string}>;
   };
   teacher_comment_draft: string;
   strengths: string[];
@@ -497,6 +525,244 @@ export type GradingDraft = {
   model: string | null;
   created_at: string;
   teacher_review_required: boolean;
+  student_facing_feedback?: StudentFacingFeedback | null;
+  ai_student_facing_feedback?: StudentFacingFeedback | null;
+  teacher_facing_explanation?: string | null;
+  suspected_misconception?: string | null;
+  recommended_next_step?: string | null;
+  uncertainty_flags?: string[];
+  evidence_used?: string | null;
+};
+
+export type ClassInsightMasteryBucket = {
+  label: string;
+  count: number;
+  percent: number;
+};
+
+export type ClassInsightCriterion = {
+  criterion: string;
+  average_score: number;
+  max_score: number;
+  average_percentage: number;
+  sample_count: number;
+};
+
+export type ClassInsight = {
+  assignment_id: string;
+  available: boolean;
+  reason?: string;
+  confirmed_grades_count: number;
+  unconfirmed_count: number;
+  class_average_percentage?: number;
+  class_average_score?: number;
+  max_score?: number;
+  mastery_distribution?: {
+    mastery: ClassInsightMasteryBucket;
+    developing: ClassInsightMasteryBucket;
+    beginning: ClassInsightMasteryBucket;
+  };
+  most_common_misconception?: {text: string; frequency: number; percent_of_class: number} | null;
+  criterion_averages?: ClassInsightCriterion[];
+  strongest_criterion?: ClassInsightCriterion | null;
+  weakest_criterion?: ClassInsightCriterion | null;
+  students_needing_support?: Array<{
+    student_number: number | null;
+    percentage: number;
+    mastery_level: string;
+    mastery_level_label: string;
+    assignment_grade_id?: string;
+    suspected_misconception?: string | null;
+  }>;
+  students_ready_for_extension?: Array<{student_number: number | null; percentage: number; mastery_level: string}>;
+  reteach_recommendation?: {type: string; explanation: string};
+  teacher_action_prompt?: string;
+  objective_breakdown?: Array<{
+    objective_id: string;
+    objective_code: string | null;
+    description: string | null;
+    students_assessed: number;
+    mastery_count: number;
+    developing_count: number;
+    beginning_count: number;
+    average_percentage: number;
+    mastery_percentage: number;
+  }>;
+  generated_at: string;
+};
+
+export type RecoveryQueueMasterySnapshot = {
+  total_students_assessed: number;
+  mastery_count: number;
+  developing_count: number;
+  beginning_count: number;
+  mastery_percentage: number;
+  average_percentage: number;
+  most_common_misconception?: string | null;
+  misconception_frequency?: number;
+  snapshot_at: string;
+};
+
+export type RecoveryQueueStrategyMetadata = {
+  strategy_version: string;
+  recommended_strategy: string;
+  strategy_basis: string;
+  confidence_score: number | null;
+  confidence_label: string | null;
+  confidence_basis: string | null;
+};
+
+export type RecoveryQueueItem = {
+  id: string;
+  assignment_id: string | null;
+  instructional_package_id: string | null;
+  education_objective_id: string | null;
+  objective_code: string | null;
+  recommendation_type: "whole_class" | "small_group" | "individual_follow_up" | "extension";
+  students_affected: number[];
+  students_affected_count: number;
+  misconception_text: string | null;
+  reason: string;
+  evidence_snapshot: Record<string, unknown> | null;
+  mastery_snapshot: RecoveryQueueMasterySnapshot | null;
+  strategy_metadata: RecoveryQueueStrategyMetadata | null;
+  priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  suggested_priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
+  best_before: string | null;
+  best_before_reason: string | null;
+  best_before_at_risk: boolean;
+  status: "pending" | "scheduled" | "completed" | "deferred" | "dismissed";
+  teacher_response: string | null;
+  teacher_notes: string | null;
+  scheduled_for: string | null;
+  completed_at: string | null;
+  // Phase 8 stubs
+  success_criteria: Record<string, unknown> | null;
+  timeline_phase: string | null;
+  post_recovery_mastery_snapshot: RecoveryQueueMasterySnapshot | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RecoveryBudgetTradeOffItem = {
+  queue_item_id: string;
+  objective_code: string | null;
+  recommendation_type: string;
+  teacher_response: string | null;
+  status: string;
+  scheduled_for: string | null;
+  students_affected_count: number;
+  estimated_minutes: number;
+  displaced_component: string;
+  displaced_minutes: number;
+  impact_note: string;
+  at_risk: boolean;
+};
+
+export type RecoveryBudget = {
+  package_id: string;
+  budget_available: boolean;
+  reason?: string;
+  remaining_instructional_days?: number;
+  remaining_instructional_minutes?: number;
+  estimated_recovery_minutes?: number;
+  pacing_impact_percent?: number;
+  pacing_impact_label?: string;
+  pending_items_count?: number;
+  scheduled_items_count?: number;
+  deferred_items_count?: number;
+  recovery_breakdown?: RecoveryBudgetTradeOffItem[];
+  trade_off_analysis?: {
+    available: boolean;
+    total_displaced_minutes?: number;
+    displacement_note?: string | null;
+    reason?: string | null;
+  };
+  budget_note?: string;
+  generated_at: string;
+};
+
+// ── Phase 8: Learning Recovery Planner ────────────────────────────────────────
+
+export type RecoveryDecisionStage = {
+  label: string;
+  description: string;
+  success_target?: string;
+  target_mastery_percent?: number;
+  assessment_type?: string;
+  evaluation_window_days?: number;
+  recommended_strategy?: string;
+  estimated_minutes?: number;
+  pacing_impact?: string;
+  verification_method?: string;
+  expected_mastery_gain_percent?: number;
+  tracking?: string;
+};
+
+export type RecoveryDecision = {
+  available: boolean;
+  reason?: string;
+  assignment_id: string;
+  instructional_package_id: string | null;
+  objective_code: string | null;
+  strategy: string;
+  level: number;
+  why: string;
+  recovery_intent: string;
+  recommended_artifact_type: string;
+  suggested_priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  estimated_minutes: number;
+  pacing_impact: string;
+  plan_reteach_hint: string | null;
+  has_downstream_risk: boolean;
+  shared_misconception: string | null;
+  students_below: number[];
+  students_below_count: number;
+  mastery_percentage: number;
+  below_mastery_percent: number;
+  average_percentage: number;
+  total_students_assessed: number;
+  success_criteria_template: {
+    target_mastery_percent: number;
+    assessment_type: string;
+    evaluation_window_days: number;
+    specific_gap_to_close: string;
+    observable_evidence: string;
+    current_mastery_percent: number;
+    mastery_gain_needed: number;
+  };
+  stage_plan: {
+    stage_1_recovery_goal: RecoveryDecisionStage;
+    stage_2_recovery_activity: RecoveryDecisionStage;
+    stage_3_recovery_verification: RecoveryDecisionStage;
+    stage_4_recovery_outcome: RecoveryDecisionStage;
+  };
+};
+
+export type RecoveryArtifact = {
+  id: string;
+  recovery_queue_id: string | null;
+  artifact_type: string;
+  title: string;
+  content: Record<string, unknown> | null;
+  validation_result: {
+    passed: boolean;
+    builds_from_yesterday: boolean;
+    prepares_for_tomorrow: boolean;
+    preserves_contract: boolean;
+    no_new_objectives: boolean;
+    issues: string[];
+    warnings: string[];
+    post_generation?: {
+      teks_check_passed: boolean;
+      provider: string;
+    };
+  } | null;
+  provider: string | null;
+  model: string | null;
+  status: "ready" | "failed";
+  created_at: string;
+  updated_at: string;
 };
 
 export type DocumentExtraction = {
@@ -798,14 +1064,6 @@ export type PacingGuideBuilderPayload = {
   start_week?: number | null;
   end_week?: number | null;
   objectives: Array<{ objective_id: string; is_required: boolean; notes?: string | null }>;
-  weeks: Array<{
-    title: string;
-    description?: string | null;
-    sequence_number?: number;
-    unit_title?: string | null;
-    daily_plans: PacingGuideDailyPlan[];
-    objective_ids?: string[];
-  }>;
 };
 
 export type PlanningForm = {
@@ -834,6 +1092,7 @@ export type PlanningForm = {
   default_plan_end_date: string;
   required_outputs: string[];
   optional_outputs: string[];
+  recommended_outputs: string[];
 };
 
 export type PlanningPacingDay = {
@@ -921,6 +1180,78 @@ export type PackageDashboard = {
   recently_generated_packages: InstructionalPackageSummary[];
 };
 
+export type TeachingBriefConfidence = {
+  level: "Ready" | "Ready with Notes" | "Needs Review";
+  explanation: string;
+};
+
+export type TeachingBriefTimingSegment = {
+  name: string;
+  minutes: number;
+  flexible: boolean;
+  trim_to_minutes: number | null;
+  skippable: boolean;
+};
+
+export type TeachingBriefSubject = {
+  subject_name: string;
+  lesson_snapshot: {
+    learning_target: string;
+    lesson_time_minutes: number;
+    assessment: string;
+    key_misconception: string | null;
+    confidence: TeachingBriefConfidence;
+  };
+  before_class: {
+    preparation_tasks: string[];
+  };
+  daily_brief: {
+    big_idea: string;
+    learning_target: string;
+    why_it_matters: string;
+  };
+  estimated_timing: {
+    total_minutes: number;
+    segments: TeachingBriefTimingSegment[];
+    if_running_behind: string;
+    non_negotiable: string;
+  };
+  critical_moments: Array<{
+    moment: string;
+    why_it_matters: string;
+    suggested_move: string;
+  }>;
+  classroom_support: {
+    common_misconceptions: string[];
+    in_the_moment: string[];
+    mastery_looks_like: string;
+  };
+  student_support: {
+    if_struggling: {
+      reteach_strategy: string;
+      scaffold_recommendation: string;
+    };
+    if_mastering_quickly: {
+      extension_activity: string;
+      enrichment_discussion: string;
+    };
+  };
+  after_lesson: {
+    reflection_prompts: string[];
+  };
+};
+
+export type TeachingBriefDay = {
+  day_label: string;
+  week_num: number;
+  subjects: TeachingBriefSubject[];
+};
+
+export type TeacherTeachingBrief = {
+  generated_at: string;
+  days: TeachingBriefDay[];
+};
+
 export type InstructionalPackageDetail = {
   id: string;
   title: string;
@@ -965,7 +1296,15 @@ export type InstructionalPackageDetail = {
       subject_name: string | null;
       title: string;
     }>;
+    student_daily_decks: Array<{ artifact_id: string; day_label: string | null; title: string }>;
+    student_subject_decks: Array<{
+      artifact_id: string;
+      subject_id: string | null;
+      subject_name: string | null;
+      title: string;
+    }>;
   };
+  teacher_teaching_brief?: TeacherTeachingBrief | null;
   qr_student_packet?: QrStudentPacket | null;
   google_connection?: GoogleFormsConnectionStatus;
 };
@@ -1143,15 +1482,58 @@ export type SlideVisualAsset = {
   created_at?: string;
 };
 
+export type SlideComparisonPair = {
+  label_before: string;
+  text_before: string;
+  label_after: string;
+  text_after: string;
+  explanation?: string;
+};
+
+export type SlideImageSearch = {
+  search_terms: string[];
+  educational_purpose?: string;
+  target_grade_band?: string;
+  preferred_image_type?: string;
+  image_alt_text?: string;
+  image_rationale?: string;
+};
+
+export type SlideVisual = {
+  type: string;
+  placement?: string;
+  fallback_organizer_type?: string;
+  image_search?: SlideImageSearch;
+  organizer_data?: Record<string, unknown>;
+  source_url?: string | null;
+  local_asset_key?: string | null;
+  attribution?: string | null;
+  visual_generation_status?: string | null;
+};
+
+export type SlideEngagement = {
+  type: string;
+  prompt: string;
+};
+
 export type TeachingPresentationSlide = {
   id: string;
   slideType: string;
+  layoutType?: string;
   title: string;
   subtitle?: string;
+  body?: string;
   bullets: string[];
   teacherNotes?: string;
+  speakerNotes?: string;
+  visualLearningGoal?: string;
+  studentEmotion?: string;
+  discussionQuestion?: string;
+  comparisonPairs?: SlideComparisonPair[];
   subjectName?: string;
   layout?: string;
+  visual?: SlideVisual | null;
+  engagement?: SlideEngagement | null;
   visualType?: string;
   visualRecommendation?: SlideVisualRecommendation | null;
   objectiveText?: string;
@@ -1168,4 +1550,146 @@ export type AdminDashboard = {
   schools: number;
   grades: number;
   subjects: number;
+};
+
+// ── Phase 9: Teacher Workspace — Today ────────────────────────────────────────
+
+export type TodayArtifactRef = {
+  artifact_id: string;
+  title: string;
+  status: string;
+  artifact_type: string;
+};
+
+export type TodayTeachingFocus = {
+  coaching: string[];
+  watch_for: string | null;
+  activation_strategy: string | null;
+  anticipated_misconception: string | null;
+  success_evidence: string | null;
+};
+
+export type TodayTimeline = {
+  label: string;
+  start_minute: number;
+  duration_minutes: number;
+  artifact_type?: string;
+};
+
+export type TodayRecoveryItem = {
+  queue_item_id: string;
+  package_id: string | null;
+  objective_code: string | null;
+  priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  recommendation_type: string;
+  teacher_response: string | null;
+  status: string;
+  scheduled_for: string | null;
+  best_before: string | null;
+  misconception_text: string | null;
+  timeline_phase: string | null;
+  students_affected_count: number;
+  is_today: boolean;
+};
+
+export type SubjectToday = {
+  package_id: string;
+  package_title: string;
+  subject_name: string;
+  subject_id: string;
+  week_number: number;
+  week_label: string;
+  day_label: string;
+
+  student_goal: string | null;
+  teacher_goal: string | null;
+  builds_from_yesterday: string | null;
+  prepares_for_tomorrow: string | null;
+  reteach_if_needed: string | null;
+  observable_mastery_evidence: string | null;
+  exit_ticket_stem: string | null;
+
+  teaching_focus: TodayTeachingFocus | null;
+  timeline: TodayTimeline[];
+  artifacts: Record<string, TodayArtifactRef>;
+  has_lesson_plan: boolean;
+  has_slide_deck: boolean;
+  has_bell_ringer: boolean;
+  has_exit_ticket: boolean;
+  recovery_items: TodayRecoveryItem[];
+  tomorrow: {
+    day_label: string | null;
+    student_goal: string | null;
+    teacher_goal: string | null;
+    builds_on_today: string | null;
+  } | null;
+};
+
+export type BeforeClassItem = {
+  label: string;
+  status: "ready" | "pending" | "recovery" | "alert" | "coaching";
+  action: "view" | "present" | "print" | "view_recovery" | "grade" | null;
+  artifact_id?: string;
+  package_id?: string;
+  subject_name?: string;
+  queue_item_id?: string;
+  priority?: string;
+  note?: string;
+  icon: "check" | "pending" | "recovery" | "alert" | "coaching";
+};
+
+export type TodayGradingItem = {
+  assignment_id: string;
+  title: string;
+  package_id: string;
+  pending_grade_count: number;
+  week_number: number;
+};
+
+export type TodayVerificationItem = {
+  queue_item_id: string;
+  objective_code: string | null;
+  misconception_text: string | null;
+  priority: string;
+  completed_at: string;
+  days_since_completion: number;
+  evaluation_window_days: number;
+};
+
+export type MorningBrief = {
+  date_label: string;
+  subject_names: string[];
+  focus_items: { subject: string; focus: string }[];
+  pending_grade_count: number;
+  recovery_today_count: number;
+  high_priority_recovery_count: number;
+  readiness_statement: string;
+};
+
+export type EndOfDay = {
+  recovery_completed_today: number;
+  remaining_grading: number;
+  verification_pending: number;
+  tomorrow_focuses: { subject: string; focus: string | null; builds_on_today: string | null }[];
+  reflection_prompt: string | null;
+};
+
+export type TodayAlert = {
+  type: "recovery_due" | "verification_due";
+  priority: string;
+  message: string;
+  queue_item_id: string;
+};
+
+export type TodayClassroom = {
+  date: string;
+  day_of_week: string;
+  morning_brief: MorningBrief;
+  subjects_today: SubjectToday[];
+  before_class: BeforeClassItem[];
+  grading_queue: TodayGradingItem[];
+  recovery_today: TodayRecoveryItem[];
+  verification_due: TodayVerificationItem[];
+  end_of_day: EndOfDay;
+  alerts: TodayAlert[];
 };
