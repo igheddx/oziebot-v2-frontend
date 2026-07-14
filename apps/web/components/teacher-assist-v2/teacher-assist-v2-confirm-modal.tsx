@@ -9,6 +9,7 @@ type ConfirmModalProps = {
   detail?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  destructive?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -20,6 +21,7 @@ export function TeacherAssistV2ConfirmModal({
   detail,
   confirmLabel = "Yes, remove",
   cancelLabel = "No, keep it",
+  destructive = true,
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
@@ -68,7 +70,15 @@ export function TeacherAssistV2ConfirmModal({
           <button type="button" className="ta-button-secondary h-10 px-4 text-sm" onClick={onCancel}>
             {cancelLabel}
           </button>
-          <button type="button" className="ta-button-primary h-10 px-4 text-sm" onClick={onConfirm}>
+          <button
+            type="button"
+            className={`h-10 px-4 text-sm font-medium rounded-lg ${
+              destructive
+                ? "bg-rose-600 text-white hover:bg-rose-700 active:bg-rose-800"
+                : "ta-button-primary"
+            }`}
+            onClick={onConfirm}
+          >
             {confirmLabel}
           </button>
         </div>

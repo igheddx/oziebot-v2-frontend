@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
 import { resolveTeacherAssistFileUrl } from "@/lib/auth-service";
 import type { InstructionalPackageSummary } from "@/lib/teacher-assist-v2-types";
+import { TeacherAssistV2ConfirmModal } from "@/components/teacher-assist-v2/teacher-assist-v2-confirm-modal";
 
 const STATUS_STYLES: Record<string, string> = {
   active: "bg-emerald-50 text-emerald-800 border-emerald-200",
@@ -25,6 +27,7 @@ export function InstructionalPackageCard({
   onMarkDone?: (packageId: string) => void;
   onDelete?: (packageId: string) => void;
 }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const weekLabel =
     pkg.week_start === pkg.week_end ? `Week ${pkg.week_start}` : `Weeks ${pkg.week_start}–${pkg.week_end}`;
 
@@ -81,16 +84,26 @@ export function InstructionalPackageCard({
           <button
             type="button"
             className="h-8 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-medium text-rose-700 hover:bg-rose-100"
-            onClick={() => {
-              if (window.confirm(`Delete "${pkg.title}"? This cannot be undone. Your AI cache will be preserved so regeneration will be fast.`)) {
-                onDelete(pkg.id);
-              }
-            }}
+            onClick={() => setConfirmOpen(true)}
           >
             Delete
           </button>
         ) : null}
       </div>
+
+      <TeacherAssistV2ConfirmModal
+        open={confirmOpen}
+        title="Delete package?"
+        message={`"${pkg.title}" will be permanently removed.`}
+        detail="Your AI cache is preserved — regenerating will be fast."
+        confirmLabel="Delete"
+        cancelLabel="Keep it"
+        onConfirm={() => {
+          setConfirmOpen(false);
+          onDelete?.(pkg.id);
+        }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </article>
   );
 }
