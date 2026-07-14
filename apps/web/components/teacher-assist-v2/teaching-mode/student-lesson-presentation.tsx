@@ -890,12 +890,36 @@ function TextLeftImageRightTemplate({ slide, artifactId, accent, accentLighter }
   );
 }
 
+// ─── Template 12: strand_separator ───────────────────────────────────────────
+// Full-width text-only transition card — no image, no organizer.
+
+function StrandSeparatorTemplate({ slide, accent }: TemplateProps) {
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center bg-slate-950 px-16 py-12 text-center">
+      <p className="mb-4 text-sm font-bold uppercase tracking-[0.3em]" style={{ color: accent }}>
+        {slide.slideType.replaceAll("_", " ")}
+      </p>
+      <h1 className="text-6xl font-extrabold leading-tight text-white sm:text-7xl xl:text-8xl">
+        {slide.title}
+      </h1>
+      {slide.body ? (
+        <p className="mt-6 max-w-2xl text-2xl leading-relaxed text-slate-300 sm:text-3xl">
+          {slide.body}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 // ─── Layout router ────────────────────────────────────────────────────────────
 
 function resolveLayout(slide: TeachingPresentationSlide): string {
   const explicit = slide.layout;
   if (explicit) return explicit;
   switch (slide.slideType) {
+    case "strand_separator":
+    case "separator":
+    case "transition":           return "strand_separator";
     case "hook":                 return "hook_full_image";
     case "connection":           return "hook_full_image";
     case "today_we_learn":       return "objective_image";
@@ -960,6 +984,9 @@ function SlideRenderer(props: TemplateProps) {
 
     case "image_left_text_right":
       return <ImageLeftTextRightTemplate {...props} />;
+
+    case "strand_separator":
+      return <StrandSeparatorTemplate {...props} />;
 
     case "text_left_image_right":
     default:
