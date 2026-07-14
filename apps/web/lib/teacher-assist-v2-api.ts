@@ -703,6 +703,20 @@ export function generateV2InstructionalPackage(body: {
   plan_start_date?: string;
   plan_end_date?: string;
   excluded_pacing_material_ids?: string[];
+  instructional_delivery_profile?: {
+    mode: string;
+    strands?: Array<{
+      strand_name: string;
+      minutes_per_day?: number;
+      days?: string[];
+      delivery_mode?: string;
+      curriculum_text_access?: string;
+      independent_reading_access?: string;
+      closure_required?: boolean;
+    }>;
+  } | null;
+  lost_instructional_days?: number;
+  quality_review_enabled?: boolean;
 }) {
   return writeJson<InstructionalPackageDetail>("/v1/teacher-assist-v2/teacher/planning/packages/generate", "POST", body);
 }
@@ -765,6 +779,24 @@ export function fetchV2InstructionalPackages(filters?: {
   );
 }
 
+export async function deleteV2InstructionalPackage(packageId: string): Promise<void> {
+  const response = await authFetch(`/v1/teacher-assist-v2/teacher/planning/packages/${packageId}`, {
+    method: "DELETE",
+  });
+  if (!response) {
+    throw new Error("Could not reach API. Check that the backend is running.");
+  }
+  if (!response.ok) {
+    const body = await response.text();
+    let detail = body;
+    try {
+      const parsed = JSON.parse(body);
+      detail = parsed?.detail ?? body;
+    } catch (_) {}
+    throw new Error(detail || `Delete failed (${response.status})`);
+  }
+}
+
 export function closeOutV2InstructionalPackage(
   packageId: string,
   body: { close_out_notes?: string | null; completed_date?: string | null },
@@ -780,21 +812,51 @@ export function fetchV2InstructionalPackage(packageId: string) {
   return readJson<InstructionalPackageDetail>(`/v1/teacher-assist-v2/teacher/planning/packages/${packageId}`);
 }
 
-/** Safe variant for background polling — never clears the session on 401. */
+/** Safe variant for background polling — never clears the session on 401.
+ *  Returns null to keep polling, "not_found" / "auth_error" to stop. */
 export async function pollV2PackageStatus(packageId: string): Promise<string | null> {
   const res = await authFetch(
     `/v1/teacher-assist-v2/teacher/planning/packages/${packageId}`,
     {},
     { clearSessionOn401: false },
   );
-  if (!res || !res.ok) return null;
+  if (!res) return null; // network error — keep polling
+  if (res.status === 401) return "auth_error"; // session expired — stop hammering
+  if (res.status === 404 || res.status === 403) return "not_found"; // package gone or wrong user — stop
+  if (!res.ok) return null; // other server error — keep polling
   const data = (await res.json()) as InstructionalPackageDetail;
   return data.status ?? null;
+}
+
+export function triggerV2PackageRegen(
+  packageId: string,
+  opts: { scope: string; artifact_types?: string[]; force?: boolean },
+) {
+  return writeJson<{ status: string; package_id: string; scope: string }>(
+    `/v1/teacher-assist-v2/teacher/planning/packages/${packageId}/actions/regenerate`,
+    "POST",
+    opts,
+  );
+}
+
+export function setArtifactDevLock(artifactId: string, locked: boolean) {
+  return writeJson<{ artifact_id: string; artifact_type: string; locked: boolean }>(
+    `/v1/teacher-assist-v2/teacher/planning/artifacts/${artifactId}/dev-lock`,
+    "PUT",
+    { locked },
+  );
 }
 
 export function triggerArtifactImageFetch(artifactId: string) {
   return writeJson<{ fetched: number; pending: number; failed: number; total: number; message: string }>(
     `/v1/teacher-assist-v2/teacher/artifacts/${artifactId}/fetch-images`,
+    "POST",
+  );
+}
+
+export function triggerPackageImageFetch(packageId: string) {
+  return writeJson<{ artifacts_processed: number; artifacts_failed: number }>(
+    `/v1/teacher-assist-v2/teacher/planning/packages/${packageId}/fetch-images`,
     "POST",
   );
 }

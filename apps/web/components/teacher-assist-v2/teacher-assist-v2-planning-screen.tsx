@@ -24,6 +24,110 @@ import type {
   PlanningSupplementalMaterial,
 } from "@/lib/teacher-assist-v2-types";
 
+const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"] as const;
+type Weekday = (typeof WEEKDAYS)[number];
+
+type DeliveryMode = "ai_optimized" | "daily_balanced" | "block_schedule";
+
+type DeliveryStrand = {
+  strand_name: string;
+  minutes_per_day: string; // string for input control; converted to number on submit
+  days: Weekday[];
+  // Classroom Instruction Profile (CIP) fields
+  delivery_mode: string;
+  curriculum_text_access: string;
+  independent_reading_access: string;
+  closure_required: boolean;
+};
+
+const READING_DELIVERY_MODE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "", label: "— not set —" },
+  { value: "teacher_read_aloud", label: "Teacher Read Aloud" },
+  { value: "shared_reading", label: "Shared Reading" },
+  { value: "students_have_individual_copies", label: "Student Individual Copies" },
+  { value: "small_group_reading", label: "Small Group" },
+  { value: "independent_reading", label: "Independent Reading" },
+  { value: "teacher_choice", label: "Teacher Choice" },
+];
+
+const WRITING_DELIVERY_MODE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "", label: "— not set —" },
+  { value: "guided_writing", label: "Guided Writing" },
+  { value: "independent_writing", label: "Independent Writing" },
+  { value: "shared_writing", label: "Shared Writing" },
+  { value: "teacher_choice", label: "Teacher Choice" },
+];
+
+const CURRICULUM_TEXT_ACCESS_OPTIONS: Array<{ value: string; label: string; hint?: string }> = [
+  { value: "", label: "— not set —" },
+  { value: "teacher_copy_only", label: "Teacher Copy Only", hint: "Only you have the text — students listen to your read-aloud" },
+  { value: "projected_shared_display", label: "Projected / Shared Display", hint: "Text shown on projector or smartboard" },
+  { value: "class_set", label: "Class Set", hint: "Every student has their own copy" },
+  { value: "small_group_sets", label: "Small Group Sets", hint: "Copies rotate through small groups" },
+  { value: "digital_student_access", label: "Digital (student devices)", hint: "Students access text on their own devices" },
+  { value: "student_choice_text", label: "Student Choice", hint: "No single curriculum text — students choose their own" },
+];
+
+const INDEPENDENT_READING_ACCESS_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "", label: "— not set —" },
+  { value: "classroom_library_available", label: "Classroom Library" },
+  { value: "school_library_available", label: "School Library Books" },
+  { value: "student_brought_books", label: "Student-Brought Books" },
+  { value: "digital_library", label: "Digital Library (Epic, Sora, etc.)" },
+  { value: "none", label: "None / Not applicable" },
+];
+
+function deliveryModeOptionsForStrand(strandName: string): Array<{ value: string; label: string }> {
+  const lower = strandName.toLowerCase();
+  if (/writing/.test(lower)) return WRITING_DELIVERY_MODE_OPTIONS;
+  return READING_DELIVERY_MODE_OPTIONS;
+}
+
+function buildDefaultStrands(subjectNames: string[]): DeliveryStrand[] {
+  const hasEla = subjectNames.some((n) => /\bela\b|\benglish\b/i.test(n));
+  if (hasEla) {
+    return [
+      {
+        strand_name: "Reading",
+        minutes_per_day: "35",
+        days: [...WEEKDAYS],
+        delivery_mode: "",
+        curriculum_text_access: "",
+        independent_reading_access: "",
+        closure_required: false,
+      },
+      {
+        strand_name: "Writing",
+        minutes_per_day: "35",
+        days: [...WEEKDAYS],
+        delivery_mode: "",
+        curriculum_text_access: "",
+        independent_reading_access: "",
+        closure_required: false,
+      },
+    ];
+  }
+  return [{ strand_name: "", minutes_per_day: "", days: [...WEEKDAYS], delivery_mode: "", curriculum_text_access: "", independent_reading_access: "", closure_required: false }];
+}
+
+const DELIVERY_MODES: Array<{ id: DeliveryMode; label: string; description: string }> = [
+  {
+    id: "ai_optimized",
+    label: "AI Optimized",
+    description: "TeacherAssist decides how to distribute instruction across the week. Best when your schedule is flexible.",
+  },
+  {
+    id: "daily_balanced",
+    label: "Daily Balanced",
+    description: "Every strand is taught every day. You set how many minutes each strand receives.",
+  },
+  {
+    id: "block_schedule",
+    label: "Block Schedule",
+    description: "Strands alternate by day. You choose which days each strand is taught.",
+  },
+];
+
 const OPTIONAL_OUTPUTS = [
   { id: "assignment", label: "Assignments" },
   { id: "writing_response", label: "Writing Response Pages" },
@@ -61,6 +165,12 @@ export function TeacherAssistV2PlanningScreen() {
   const [excludedPacingMaterialIds, setExcludedPacingMaterialIds] = useState<string[]>([]);
   const [materialToRemove, setMaterialToRemove] = useState<PacingGuideSupportingMaterial | null>(null);
   const [extractingMaterialId, setExtractingMaterialId] = useState<string | null>(null);
+  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>("ai_optimized");
+  const [deliveryStrands, setDeliveryStrands] = useState<DeliveryStrand[]>([
+    { strand_name: "", minutes_per_day: "", days: [...WEEKDAYS], delivery_mode: "", curriculum_text_access: "", independent_reading_access: "", closure_required: false },
+  ]);
+  const [lostInstructionalDays, setLostInstructionalDays] = useState(0);
+  const [qualityReviewEnabled, setQualityReviewEnabled] = useState(false);
 
   const districtMaterials = useMemo(() => {
     if (!review) return [];
@@ -92,12 +202,16 @@ export function TeacherAssistV2PlanningScreen() {
     return `Weeks ${weekStart}–${weekEnd}`;
   }, [weekStart, weekEnd]);
 
+  const totalCurriculumDays = (weekEnd - weekStart + 1) * 5;
+  const totalPlannedDays = Math.max(1, totalCurriculumDays - lostInstructionalDays);
+
   useEffect(() => {
     void fetchV2PlanningForm()
       .then((payload) => {
         setForm(payload);
         setTeachingOrder(payload.default_teaching_order);
         setOptionalOutputs(payload.recommended_outputs ?? ["quiz", "parent_newsletter_summary"]);
+        setDeliveryStrands(buildDefaultStrands(payload.subjects.map((s) => s.subject_name)));
         const defaultRange = payload.week_ranges[payload.week_ranges.length - 1] ?? payload.week_ranges[0];
         if (defaultRange) {
           setWeekStart(defaultRange.week_start);
@@ -224,6 +338,23 @@ export function TeacherAssistV2PlanningScreen() {
     setGenerating(true);
     setAlert(null);
     try {
+      const deliveryProfile =
+        deliveryMode === "ai_optimized"
+          ? null
+          : {
+              mode: deliveryMode,
+              strands: deliveryStrands
+                .filter((s) => s.strand_name.trim())
+                .map((s) => ({
+                  strand_name: s.strand_name.trim(),
+                  ...(s.minutes_per_day ? { minutes_per_day: parseInt(s.minutes_per_day, 10) } : {}),
+                  days: s.days,
+                  ...(s.delivery_mode ? { delivery_mode: s.delivery_mode } : {}),
+                  ...(s.curriculum_text_access ? { curriculum_text_access: s.curriculum_text_access } : {}),
+                  ...(s.independent_reading_access ? { independent_reading_access: s.independent_reading_access } : {}),
+                  ...(s.closure_required ? { closure_required: true } : {}),
+                })),
+            };
       const payload = await generateV2InstructionalPackage({
         week_start: weekStart,
         week_end: weekEnd,
@@ -232,6 +363,9 @@ export function TeacherAssistV2PlanningScreen() {
         plan_start_date: planStartDate,
         plan_end_date: planEndDate,
         excluded_pacing_material_ids: excludedPacingMaterialIds,
+        instructional_delivery_profile: deliveryProfile,
+        lost_instructional_days: lostInstructionalDays,
+        quality_review_enabled: qualityReviewEnabled,
       });
       setProcessingIndicator({
         kind: "package",
@@ -264,7 +398,7 @@ export function TeacherAssistV2PlanningScreen() {
         <p className="mt-1 text-sm text-slate-600">
           Build an instructional package from your adopted pacing guides for <strong>{weekLabel}</strong>.
         </p>
-        <p className="mt-1 text-xs text-slate-500">Step {step} of 4</p>
+        <p className="mt-1 text-xs text-slate-500">Step {step} of 5</p>
       </header>
 
       <TeacherAssistV2AiModeBanner status={context?.ai_generation} />
@@ -478,13 +612,226 @@ export function TeacherAssistV2PlanningScreen() {
               Back
             </button>
             <button type="button" className="ta-button-primary h-9 px-4 text-sm" onClick={() => setStep(4)}>
-              Choose outputs
+              Set delivery profile
             </button>
           </div>
         </section>
       ) : null}
 
       {step === 4 ? (
+        <section className="space-y-4 rounded-2xl border border-slate-200 bg-white/80 p-4">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">Classroom Instruction Profile</h2>
+            <p className="mt-1 text-xs text-slate-600">
+              Configure how instruction is delivered in your classroom. Controls strand scheduling, delivery
+              mode, student text access, and closure requirements — without changing curriculum or TEKS.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            {DELIVERY_MODES.map((mode) => (
+              <label
+                key={mode.id}
+                className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition-colors ${
+                  deliveryMode === mode.id
+                    ? "border-sky-400 bg-sky-50"
+                    : "border-slate-200 bg-white hover:border-slate-300"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="delivery-mode"
+                  value={mode.id}
+                  checked={deliveryMode === mode.id}
+                  onChange={() => setDeliveryMode(mode.id)}
+                  className="mt-0.5 shrink-0"
+                />
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">{mode.label}</p>
+                  <p className="mt-0.5 text-xs text-slate-600">{mode.description}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+
+          {deliveryMode !== "ai_optimized" ? (
+            <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-medium text-slate-800">
+                {deliveryMode === "daily_balanced" ? "Instructional strands (taught every day)" : "Instructional strands (configure days per strand)"}
+              </p>
+              <div className="space-y-3">
+                {deliveryStrands.map((strand, index) => (
+                  <div key={index} className="rounded-lg border border-slate-200 bg-white px-3 py-3">
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="ta-input h-8 flex-1 text-sm"
+                        placeholder="Strand name (e.g. Reading)"
+                        value={strand.strand_name}
+                        onChange={(e) => {
+                          const updated = [...deliveryStrands];
+                          updated[index] = { ...updated[index], strand_name: e.target.value };
+                          setDeliveryStrands(updated);
+                        }}
+                      />
+                      {deliveryMode === "daily_balanced" ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            className="ta-input h-8 w-20 text-center text-sm"
+                            type="number"
+                            min={1}
+                            max={180}
+                            placeholder="min"
+                            value={strand.minutes_per_day}
+                            onChange={(e) => {
+                              const updated = [...deliveryStrands];
+                              updated[index] = { ...updated[index], minutes_per_day: e.target.value };
+                              setDeliveryStrands(updated);
+                            }}
+                          />
+                          <span className="text-xs text-slate-500">min/day</span>
+                        </div>
+                      ) : null}
+                      {deliveryStrands.length > 1 ? (
+                        <button
+                          type="button"
+                          className="ta-button-secondary h-8 px-2 text-xs"
+                          onClick={() => setDeliveryStrands((current) => current.filter((_, i) => i !== index))}
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
+                    {deliveryMode === "block_schedule" ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {WEEKDAYS.map((day) => (
+                          <label key={day} className="flex items-center gap-1 text-xs text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={strand.days.includes(day)}
+                              onChange={(e) => {
+                                const updated = [...deliveryStrands];
+                                const days = e.target.checked
+                                  ? [...updated[index].days, day]
+                                  : updated[index].days.filter((d) => d !== day);
+                                updated[index] = { ...updated[index], days };
+                                setDeliveryStrands(updated);
+                              }}
+                            />
+                            {day.slice(0, 3)}
+                          </label>
+                        ))}
+                      </div>
+                    ) : null}
+                    {/* Classroom Instruction Profile fields */}
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Classroom Setup</p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <label className="block space-y-1 text-xs">
+                          <span className="font-medium text-slate-600">Delivery mode</span>
+                          <select
+                            className="ta-input h-9 w-full text-sm"
+                            value={strand.delivery_mode}
+                            onChange={(e) => {
+                              const updated = [...deliveryStrands];
+                              updated[index] = { ...updated[index], delivery_mode: e.target.value };
+                              setDeliveryStrands(updated);
+                            }}
+                          >
+                            {deliveryModeOptionsForStrand(strand.strand_name).map((opt) => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <div />
+                      </div>
+                      {/* Reading text — two separate fields */}
+                      <div className="mt-2">
+                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Reading Text</p>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <label className="block space-y-1 text-xs">
+                            <span className="font-medium text-slate-600">Curriculum text access</span>
+                            <span className="block text-[10px] text-slate-400">How students access the district-assigned lesson text</span>
+                            <select
+                              className="ta-input h-9 w-full text-sm"
+                              value={strand.curriculum_text_access}
+                              onChange={(e) => {
+                                const updated = [...deliveryStrands];
+                                updated[index] = { ...updated[index], curriculum_text_access: e.target.value };
+                                setDeliveryStrands(updated);
+                              }}
+                            >
+                              {CURRICULUM_TEXT_ACCESS_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                            {strand.curriculum_text_access === "teacher_copy_only" && (
+                              <p className="mt-1 rounded bg-amber-50 px-2 py-1 text-[10px] text-amber-700">
+                                Students will never be asked to open, read, or reference the curriculum text independently.
+                              </p>
+                            )}
+                          </label>
+                          <label className="block space-y-1 text-xs">
+                            <span className="font-medium text-slate-600">Independent reading access</span>
+                            <span className="block text-[10px] text-slate-400">Books students use during independent reading time</span>
+                            <select
+                              className="ta-input h-9 w-full text-sm"
+                              value={strand.independent_reading_access}
+                              onChange={(e) => {
+                                const updated = [...deliveryStrands];
+                                updated[index] = { ...updated[index], independent_reading_access: e.target.value };
+                                setDeliveryStrands(updated);
+                              }}
+                            >
+                              {INDEPENDENT_READING_ACCESS_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                      </div>
+                      <label className="mt-2 flex items-center gap-2 text-xs text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={strand.closure_required}
+                          onChange={(e) => {
+                            const updated = [...deliveryStrands];
+                            updated[index] = { ...updated[index], closure_required: e.target.checked };
+                            setDeliveryStrands(updated);
+                          }}
+                        />
+                        <span>Closure required for this strand (exit ticket at end of each block)</span>
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="ta-button-secondary h-8 px-3 text-xs"
+                onClick={() =>
+                  setDeliveryStrands((current) => [
+                    ...current,
+                    { strand_name: "", minutes_per_day: "", days: [...WEEKDAYS], delivery_mode: "", curriculum_text_access: "", independent_reading_access: "", closure_required: false },
+                  ])
+                }
+              >
+                + Add strand
+              </button>
+            </div>
+          ) : null}
+
+          <div className="flex gap-2">
+            <button type="button" className="ta-button-secondary h-9 px-4 text-sm" onClick={() => setStep(3)}>
+              Back
+            </button>
+            <button type="button" className="ta-button-primary h-9 px-4 text-sm" onClick={() => setStep(5)}>
+              Choose outputs
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {step === 5 ? (
         <section className="space-y-4 rounded-2xl border border-slate-200 bg-white/80 p-4">
           <h2 className="text-sm font-semibold text-slate-900">Outputs and teaching order</h2>
           <p className="text-sm text-slate-600">
@@ -500,6 +847,41 @@ export function TeacherAssistV2PlanningScreen() {
               <input className="ta-input h-9" type="date" value={planEndDate} onChange={(e) => setPlanEndDate(e.target.value)} />
             </label>
           </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Instructional time</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Planning thinks in <span className="font-medium">Instructional Days</span>, not calendar dates. Adjust for assemblies,
+                field trips, testing days, or any other time that reduces teaching time.
+              </p>
+            </div>
+            <div className="flex items-end gap-4">
+              <label className="block space-y-1 text-sm">
+                <span className="font-medium text-slate-700">Lost instructional days</span>
+                <input
+                  className="ta-input h-9 w-24"
+                  type="number"
+                  min={0}
+                  max={totalCurriculumDays - 1}
+                  value={lostInstructionalDays}
+                  onChange={(e) => {
+                    const val = Math.max(0, Math.min(totalCurriculumDays - 1, parseInt(e.target.value, 10) || 0));
+                    setLostInstructionalDays(val);
+                  }}
+                />
+              </label>
+              <div className="pb-1 text-sm text-slate-600">
+                <span className="font-medium text-slate-900">{totalPlannedDays}</span> of {totalCurriculumDays} instructional days planned
+                {lostInstructionalDays > 0 ? (
+                  <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                    {lostInstructionalDays} day{lostInstructionalDays !== 1 ? "s" : ""} compressed
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
           <div>
             <p className="text-sm font-medium text-slate-700">Teaching order</p>
             <ul className="mt-2 space-y-2">
@@ -584,8 +966,22 @@ export function TeacherAssistV2PlanningScreen() {
               )}
             </div>
           ) : null}
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-violet-600"
+              checked={qualityReviewEnabled}
+              onChange={(e) => setQualityReviewEnabled(e.target.checked)}
+            />
+            <div>
+              <p className="text-sm font-medium text-slate-800">AI Quality Review</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                An AI coach reviews each artifact after generation and applies corrections. Adds ~65 extra AI calls per package — disable to cut generation time and cost roughly in half.
+              </p>
+            </div>
+          </label>
           <div className="flex gap-2">
-            <button type="button" className="ta-button-secondary h-9 px-4 text-sm" onClick={() => setStep(3)}>
+            <button type="button" className="ta-button-secondary h-9 px-4 text-sm" onClick={() => setStep(4)}>
               Back
             </button>
             <button

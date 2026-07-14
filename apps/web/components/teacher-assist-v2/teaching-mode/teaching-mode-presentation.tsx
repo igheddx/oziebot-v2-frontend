@@ -122,7 +122,10 @@ export function TeachingModePresentation({
     layout === "independent_practice" ||
     layout === "visual_left_text_right";
   const showVisualOnTop = layout === "visual_top_text_bottom" || layout === "full_width_visual";
-  const visualType = currentSlide.visualType ?? currentSlide.visualRecommendation?.visualType;
+  const _noVisualTypes = new Set(["strand_separator", "separator", "transition"]);
+  const visualType = _noVisualTypes.has(currentSlide.slideType)
+    ? null
+    : (currentSlide.visualType ?? currentSlide.visualRecommendation?.visualType);
   const theme = slideTheme(currentSlide.slideType);
 
   return (

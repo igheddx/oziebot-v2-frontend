@@ -19,9 +19,11 @@ const STATUS_STYLES: Record<string, string> = {
 export function InstructionalPackageCard({
   pkg,
   onMarkDone,
+  onDelete,
 }: {
   pkg: InstructionalPackageSummary;
   onMarkDone?: (packageId: string) => void;
+  onDelete?: (packageId: string) => void;
 }) {
   const weekLabel =
     pkg.week_start === pkg.week_end ? `Week ${pkg.week_start}` : `Weeks ${pkg.week_start}–${pkg.week_end}`;
@@ -73,6 +75,19 @@ export function InstructionalPackageCard({
         {pkg.can_close_out && onMarkDone ? (
           <button type="button" className="ta-button-secondary h-8 px-3 text-xs" onClick={() => onMarkDone(pkg.id)}>
             Mark Done
+          </button>
+        ) : null}
+        {onDelete && pkg.status !== "processing" ? (
+          <button
+            type="button"
+            className="h-8 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-medium text-rose-700 hover:bg-rose-100"
+            onClick={() => {
+              if (window.confirm(`Delete "${pkg.title}"? This cannot be undone. Your AI cache will be preserved so regeneration will be fast.`)) {
+                onDelete(pkg.id);
+              }
+            }}
+          >
+            Delete
           </button>
         ) : null}
       </div>

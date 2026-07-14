@@ -11,6 +11,7 @@ import type {
   TodayVerificationItem,
   TodayAlert,
   TodayTimeline,
+  ClassroomInstructionProfile,
 } from "@/lib/teacher-assist-v2-types";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -251,6 +252,68 @@ function TimelineRow({ slot }: { slot: TodayTimeline }) {
 
 // ── Subject card ───────────────────────────────────────────────────────────────
 
+const CIP_DELIVERY_LABELS: Record<string, string> = {
+  teacher_read_aloud: "Read Aloud",
+  shared_reading: "Shared Reading",
+  students_have_individual_copies: "Individual Copies",
+  small_group_reading: "Small Group",
+  independent_reading: "Independent",
+  guided_writing: "Guided Writing",
+  independent_writing: "Independent Writing",
+  shared_writing: "Shared Writing",
+  teacher_choice: "Teacher Choice",
+};
+
+const CIP_CURRICULUM_ACCESS_LABELS: Record<string, string> = {
+  teacher_copy_only: "Teacher Copy Only",
+  projected_shared_display: "Projected",
+  class_set: "Class Set",
+  small_group_sets: "Small Group Sets",
+  digital_student_access: "Digital",
+  student_choice_text: "Student Choice",
+};
+
+const CIP_INDEP_ACCESS_LABELS: Record<string, string> = {
+  classroom_library_available: "Classroom Library",
+  school_library_available: "School Library",
+  student_brought_books: "Home Books",
+  digital_library: "Digital Library",
+};
+
+function CIPStrandBar({ profile }: { profile: ClassroomInstructionProfile }) {
+  const slots = profile.strand_slots_today;
+  if (!slots || slots.length === 0) return null;
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {slots.map((slot, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-1.5 rounded-lg border border-sky-100 bg-sky-50 px-2.5 py-1.5 text-xs text-sky-800"
+        >
+          <span className="font-semibold">{slot.strand_name}</span>
+          {slot.minutes_per_day ? <span className="text-sky-500">{slot.minutes_per_day}m</span> : null}
+          {slot.delivery_mode ? (
+            <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium">
+              {CIP_DELIVERY_LABELS[slot.delivery_mode] ?? slot.delivery_mode}
+            </span>
+          ) : null}
+          {slot.curriculum_text_access ? (
+            <span className={slot.curriculum_text_access === "teacher_copy_only" ? "font-medium text-amber-600" : "text-sky-500"}>
+              {CIP_CURRICULUM_ACCESS_LABELS[slot.curriculum_text_access] ?? slot.curriculum_text_access}
+            </span>
+          ) : null}
+          {slot.independent_reading_access && slot.independent_reading_access !== "none" ? (
+            <span className="text-slate-500">{CIP_INDEP_ACCESS_LABELS[slot.independent_reading_access] ?? slot.independent_reading_access}</span>
+          ) : null}
+          {slot.closure_required ? (
+            <span className="text-[10px] font-medium text-sky-600">· Closure</span>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SubjectCard({
   subject,
   onArtifactClick,
@@ -295,6 +358,11 @@ function SubjectCard({
           </button>
         )}
       </div>
+
+      {/* Classroom Instruction Profile */}
+      {subject.classroom_instruction_profile ? (
+        <CIPStrandBar profile={subject.classroom_instruction_profile} />
+      ) : null}
 
       {/* Teaching Focus */}
       {tf && (tf.coaching.length > 0 || tf.success_evidence) && (

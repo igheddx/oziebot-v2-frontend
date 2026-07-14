@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { InstructionalPackageCard } from "@/components/teacher-assist-v2/instructional-package-card";
-import { fetchV2InstructionalPackages, fetchV2TeacherHome } from "@/lib/teacher-assist-v2-api";
+import { deleteV2InstructionalPackage, fetchV2InstructionalPackages, fetchV2TeacherHome } from "@/lib/teacher-assist-v2-api";
 import type { InstructionalPackageSummary, TeacherHomeSummary } from "@/lib/teacher-assist-v2-types";
 
 export function TeacherAssistV2PackagesScreen() {
@@ -128,7 +128,18 @@ export function TeacherAssistV2PackagesScreen() {
 
       <div className="space-y-3">
         {packages.map((pkg) => (
-          <InstructionalPackageCard key={pkg.id} pkg={pkg} />
+          <InstructionalPackageCard
+            key={pkg.id}
+            pkg={pkg}
+            onDelete={async (id) => {
+              try {
+                await deleteV2InstructionalPackage(id);
+                setPackages((prev) => prev.filter((p) => p.id !== id));
+              } catch (err) {
+                alert(err instanceof Error ? err.message : "Could not delete package.");
+              }
+            }}
+          />
         ))}
       </div>
     </div>

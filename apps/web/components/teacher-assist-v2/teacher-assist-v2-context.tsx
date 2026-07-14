@@ -90,7 +90,9 @@ export function TeacherAssistV2Provider({ children }: { children: React.ReactNod
       try {
         if (processingIndicator.kind === "package") {
           const status = await pollV2PackageStatus(processingIndicator.targetId);
-          // null = auth/network error; keep polling. "processing" = still running.
+          // null = network error — keep polling.
+          // "processing" = still running — keep polling.
+          // anything else ("complete", "failed", "not_found", etc.) — clear indicator.
           if (status !== null && status !== "processing") {
             clearProcessingIndicator(processingIndicator.targetId);
           }

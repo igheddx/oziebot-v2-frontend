@@ -1307,6 +1307,160 @@ export type InstructionalPackageDetail = {
   teacher_teaching_brief?: TeacherTeachingBrief | null;
   qr_student_packet?: QrStudentPacket | null;
   google_connection?: GoogleFormsConnectionStatus;
+  instructional_delivery_profile?: {
+    mode: string;
+    strands?: Array<{
+      strand_name: string;
+      minutes_per_day?: number;
+      days?: string[];
+      delivery_mode?: string;
+      curriculum_text_access?: string;
+      independent_reading_access?: string;
+      closure_required?: boolean;
+    }>;
+  } | null;
+  curriculum_resource_alignment?: CurriculumResourceAlignment | null;
+  strand_learning_journeys?: StrandLearningJourneys | null;
+  total_curriculum_days?: number | null;
+  lost_instructional_days?: number | null;
+  total_planned_days?: number | null;
+  generation_started_at?: string | null;
+  generation_completed_at?: string | null;
+  generation_duration_seconds?: number | null;
+  generation_manifest?: GenerationManifest | null;
+};
+
+export type GenerationManifest = {
+  pipeline_schema_version: string;
+  generation_mode: string;
+  curriculum_hash: string;
+  planning_hash: string;
+  delivery_hash: string;
+  prompt_versions_used: Record<string, string>;
+  cost_cents_by_feature: Record<string, number>;
+  total_generation_cost_cents: number;
+  artifact_source_counts: Record<string, { ai: number; deterministic: number; cached: number }>;
+  cache_layer_hits?: Record<string, boolean>;
+  built_at: string;
+};
+
+export type ArtifactGenerationProvenance = {
+  prompt_version: string;
+  model: string | null;
+  generation_source: "ai" | "deterministic" | "cached" | "locked";
+  dependency_hash: string;
+  estimated_cost_cents: number;
+  input_tokens: number;
+  output_tokens: number;
+  generated_at: string;
+};
+
+export type StrandObjective = {
+  sequence: number;
+  week: number;
+  teks_codes: string[];
+  objective: string;
+  curriculum_resource?: string;
+  estimated_days?: number;
+  requires_preteach?: boolean;
+  prerequisite_knowledge?: string[];
+  mastery_evidence?: string;
+  instructional_focus?: string;
+};
+
+export type ResourceBinding = {
+  resource_title: string;
+  bound_to_objective_sequences: number[];
+  binding_reason?: string;
+};
+
+export type CrossStrandConnection = {
+  connected_strand: string;
+  at_objective_sequence: number;
+  connection_type: string;
+  connection: string;
+};
+
+export type StrandJourney = {
+  strand_name: string;
+  total_instructional_days?: number;
+  objectives: StrandObjective[];
+  resource_bindings?: ResourceBinding[];
+  cross_strand_connections?: CrossStrandConnection[];
+};
+
+export type StrandLearningJourneys = {
+  schema_version: string;
+  generated_at?: string;
+  curriculum_duration_weeks?: number;
+  curriculum_duration_derived?: boolean;
+  strand_journeys: Record<string, StrandJourney>;
+};
+
+export type CurriculumResourceEntry = {
+  title: string | null;
+  resource_type: string | null;
+  theme: string | null;
+  topic: string | null;
+  allowed_uses: string[];
+  supported_objectives: string[];
+  curriculum_grounding: number | null;
+  extraction_source: string | null;
+};
+
+export type CurriculumResourceAlignment = {
+  total_resources: number;
+  weeks: Record<string, Record<string, Record<string, CurriculumResourceEntry[]>>>;
+};
+
+// ── Classroom Authenticity Engine — structured lesson plan types ──────────────
+
+export type LessonPlanPreteach = {
+  activate_prior_knowledge?: string;
+  vocabulary_preview?: string;
+  student_friendly_explanation?: string;
+  why_this_matters?: string;
+  engagement_question?: string;
+};
+
+export type LessonPlanTeacherModelingScript = {
+  teacher_says?: string;
+  students_do?: string;
+  teacher_questions?: string[];
+  expected_student_thinking?: string;
+  common_misconceptions?: string[];
+};
+
+export type LessonPlanSubjectBlock = {
+  subject_name?: string;
+  teks_alignment?: Array<{ code: string; description: string }>;
+  learning_target?: string;
+  curriculum_resource?: string;
+  resource_rationale?: string;
+  preteach?: LessonPlanPreteach;
+  teacher_modeling_script?: LessonPlanTeacherModelingScript;
+  objective?: string;
+  mini_lesson?: string;
+  direct_instruction?: string;
+  guided_practice?: string;
+  independent_practice?: string;
+  checks_for_understanding?: string[];
+  closure?: string;
+  transition?: string;
+  teacher_actions?: string[];
+  student_activity?: string[];
+  materials?: string[];
+  assessment?: string;
+  notes?: string;
+  _needs_review?: boolean;
+  _review_reason?: string;
+  _completeness_issues?: string[];
+};
+
+export type StructuredLessonPlan = {
+  title?: string;
+  summary?: string;
+  subjects?: LessonPlanSubjectBlock[];
 };
 
 export type ArtifactDownload = {
@@ -1410,6 +1564,51 @@ export type PackageAdditionalAssignmentForm = {
   }>;
 };
 
+export type QualityReviewCategory = {
+  score: number;
+  findings?: string[];
+  finding?: string;
+};
+
+export type QualityReviewFlags = {
+  missing_curriculum_resource?: boolean;
+  image_review_needed?: boolean;
+  continuity_issue?: boolean;
+  placeholder_language?: boolean;
+  incomplete_rhythm?: boolean;
+  weak_teacher_experience?: boolean;
+};
+
+export type ArtifactQualityReview = {
+  overall_score: number;
+  review_status: string;
+  pre_correction_status?: string;
+  strengths: string[];
+  suggestions: string[];
+  corrections_applied: string[];
+  correction_groups?: Record<string, number>;
+  teacher_attention_needed: string[];
+  flags: QualityReviewFlags;
+  categories: {
+    curriculum_fidelity?: QualityReviewCategory;
+    instructional_continuity?: QualityReviewCategory;
+    classroom_authenticity?: QualityReviewCategory;
+    instructional_rhythm?: QualityReviewCategory;
+    lesson_variety?: QualityReviewCategory;
+    images?: QualityReviewCategory;
+    cognitive_load?: QualityReviewCategory;
+    teacher_experience?: QualityReviewCategory;
+  };
+  reviewed_at?: string;
+  review_version?: string;
+  review_scope?: {
+    artifact_type?: string;
+    days_analyzed?: number;
+    strands_analyzed?: number;
+    scope_note?: string;
+  };
+};
+
 export type InstructionalPackageArtifact = {
   id: string;
   artifact_type: string;
@@ -1418,6 +1617,9 @@ export type InstructionalPackageArtifact = {
   subject_id?: string | null;
   subject_name?: string | null;
   status?: string;
+  quality_review?: ArtifactQualityReview | null;
+  generation_provenance?: ArtifactGenerationProvenance | null;
+  dev_locked?: boolean;
   description?: string | null;
   linked_rubric_artifact_id?: string | null;
   linked_writing_response_artifact_id?: string | null;
@@ -1593,6 +1795,20 @@ export type TodayRecoveryItem = {
   is_today: boolean;
 };
 
+export type ClassroomInstructionStrandSlot = {
+  strand_name: string;
+  minutes_per_day?: number;
+  delivery_mode?: string;
+  curriculum_text_access?: string;
+  independent_reading_access?: string;
+  closure_required?: boolean;
+};
+
+export type ClassroomInstructionProfile = {
+  mode: string;
+  strand_slots_today: ClassroomInstructionStrandSlot[];
+};
+
 export type SubjectToday = {
   package_id: string;
   package_title: string;
@@ -1624,6 +1840,7 @@ export type SubjectToday = {
     teacher_goal: string | null;
     builds_on_today: string | null;
   } | null;
+  classroom_instruction_profile: ClassroomInstructionProfile | null;
 };
 
 export type BeforeClassItem = {

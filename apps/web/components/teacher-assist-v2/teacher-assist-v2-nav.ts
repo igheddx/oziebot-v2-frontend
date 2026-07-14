@@ -17,6 +17,7 @@ export const TEACHER_ASSIST_V2_ROOT_ADMIN_NAV: TeacherAssistV2NavItem[] = [
   { href: "/teacher-assist-v2/admin/hierarchy", label: "Hierarchy Explorer" },
   { href: "/teacher-assist-v2/admin/ai-settings", label: "AI Settings" },
   { href: "/teacher-assist-v2/admin/settings", label: "Settings" },
+  { href: "/teacher-assist-v2/packages", label: "Packages (Dev)" },
 ];
 
 export const TEACHER_ASSIST_V2_TEACHER_NAV: TeacherAssistV2NavItem[] = [
