@@ -254,14 +254,22 @@ export function TeacherAssistV2GradebookScreen() {
                     ...group.assignments.map((assignment) => (
                       <th key={assignment.column_key} className="min-w-[9rem] border-l border-slate-100 px-2 py-2 align-bottom">
                         <div className="font-medium text-slate-800">{assignment.title}</div>
-                        <div className="mt-1 text-[11px] text-slate-500">Week {assignment.week_number}</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                          <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 ring-1 ring-sky-200">
+                            {group.objective_code}
+                          </span>
+                          <span className="text-[11px] text-slate-500">Wk {assignment.week_number}</span>
+                        </div>
                       </th>
                     )),
                     <th
                       key={`${group.objective_id}-summary`}
                       className="min-w-[6rem] border-l border-amber-200 bg-amber-50 px-2 py-2 align-bottom text-amber-900"
                     >
-                      TEKS mastery
+                      <div>TEKS mastery</div>
+                      <div className="mt-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 ring-1 ring-amber-200 inline-block">
+                        {group.objective_code}
+                      </div>
                     </th>,
                   ])}
                 </tr>
